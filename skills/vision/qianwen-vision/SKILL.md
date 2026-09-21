@@ -47,55 +47,30 @@ print(detect_api_key_type('scripts/qianwen_lib.py'))
 
 | Output | Meaning |
 |--------|---------|
-| `token-plan` | Token Plan key — use only models from the Token Plan list below. |
+| `token-plan` | Token Plan key — use only models from the Token Plan catalog below. |
 | `payg` | Pay-as-you-go key — full model catalog available. |
 | `not-set` | No key configured. |
 
-For Token Plan, use an exact model from qianwen-model-selector, or consult
-`qianwen-ops-auth/references/tokenplan.md`. If unavailable, use:
-- Personal: https://platform.qianwenai.com/docs/token-plan/personal/token-plan-personal-overview.md
-- Team: https://platform.qianwenai.com/docs/token-plan/team/token-plan-team-overview.md
-
-Token Plan users: use a model with vision capability — `qwen3.8-max`, `qwen3.8-flash`,
-`qwen3.7-plus`, `qwen3.6-flash` (personal + team), or `qwen3.6-plus`, `kimi-k2.7-code`,
-`kimi-k2.6`, `kimi-k2.5` (team only). Other models in Token Plan do not support image/video
-understanding.
+For Token Plan, fetch and read the current [Token Plan model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-token-plan-models.md), then use an exact listed vision-capable model. If CDN access fails, use the [local fallback](cdn/references/qianwen-token-plan-models.md).
 
 Token Plan supports only specific models — use exactly a model from the references above; do not
 guess or probe model availability. For PAYG, continue below.
 
-> **Token Plan users**: The `ocr` default `qwen3.5-ocr` and `reason` default `qvq-max` are NOT on Token Plan.
-> - **OCR**: specify `--model qwen3.8-flash` (low-cost general OCR) or `qwen3.8-max` (best quality). Specialized ID-card/coordinate/formula extraction may be slightly less accurate than the dedicated OCR model.
-> - **Visual reasoning**: specify `--model qwen3.8-max` (visual reasoning + thinking) or `qwen3.8-flash` (lightweight).
+> **Token Plan users**: Use the Qwen vision model catalog below for current compatible substitutes when a task default is not on Token Plan.
 
 ## Model Selection
 
-| Model | Use Case |
-|-------|----------|
-| **qwen3.8-max** | Strongest flagship — 2.4T params, MoE. Top-tier multimodal (text+image+video). Thinking on by default. 1M context. Higher cost. |
-| **qwen3.8-flash** | Fast flagship multimodal — same-gen as qwen3.8-max, optimized for speed and cost-efficiency. Multimodal (text+image+video). Thinking on by default. 1M context. |
-| **qwen3.7-flash** | High-perf multimodal flash — surpasses qwen3.6-flash across all dimensions. Enhanced universal recognition, Search Agent & CI Agent. Vibe coding optimized. Thinking on by default. 1M context. Best cost-efficiency for vision tasks. |
-| **qwen3.7-plus** | **Preferred** — next-gen balanced model, surpasses qwen3.6-plus in multimodal understanding, Agent execution & coding, GUI perception. 1M context. Thinking on by default. |
-| **qwen3.6-plus** | Previous-gen balanced — multimodal (text+image+video). Thinking on by default. Strong coding & universal recognition. |
-| **qwen3.5-plus** | Unified multimodal (text+image+video). Thinking on by default. |
-| **qwen3.5-flash** | Fast multimodal — cheaper, faster. Thinking on by default. |
-| **qwen3-vl-plus** | High-precision — object localization (2D/3D), document/webpage parsing. |
-| **qwen3-vl-flash** | Fast vision — lower latency, 33 languages. |
-| **qvq-max** | Visual reasoning — chain-of-thought for math, charts. **Streaming only.** |
-| **qwen3.5-ocr** | OCR — latest recommended OCR model. PDF parsing, multi-turn, enhanced ID/card recognition. |
-| **qwen-vl-ocr** | OCR — text extraction, table parsing, document scanning. Legacy; use `--model qwen-vl-ocr` to select explicitly. |
-| **qwen-vl-max** | Qwen2.5-VL — best-performing in 2.5 series. |
-| **qwen-vl-plus** | Qwen2.5-VL — faster, good balance of performance and cost, 11 languages. |
+Before selecting, recommending, or defaulting a model, fetch and read the current [Qwen vision model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-vision-models.md). It contains the model list, basic model information, task recommendations, compatibility notes, and defaults. If CDN access fails, use the [local fallback](cdn/references/qianwen-vision-models.md).
 
 1. **User specified a model** → use directly.
 2. **Consult the qianwen-model-selector skill** when model choice depends on requirement, scenario, or pricing.
-3. **No signal, clear task** → `qwen3.7-plus`. Use `qwen3.7-flash` for cost-efficient high-performance vision. Use `qwen3.8-max` for the most complex reasoning. Use `qwen3-vl-plus` for precise localization or 3D detection.
+3. **No signal, clear task** → use the default and task-specific alternatives from the model catalog.
 
-> **⚠️ Important**: The model list above is a **point-in-time snapshot** and may be outdated. Model availability
+> **⚠️ Important**: The model catalog is a **point-in-time snapshot** and may be outdated. Model availability
 > changes frequently. **Always check the [official model list](https://www.qianwenai.com/models)
 > for the authoritative, up-to-date catalog before making model decisions.**
 
-> **Model details**: For more information about a specific model, direct the user to its detail page: `https://www.qianwenai.com/models/<model-name>` (replace `<model-name>` with the exact model ID, e.g. `qwen3.6-plus` → https://www.qianwenai.com/models/qwen3.6-plus). NEVER modify or guess the model name in the URL.
+> **Model details**: For more information about a specific model, direct the user to `https://www.qianwenai.com/models/<model-name>`. Replace `<model-name>` with the exact model ID; never modify or guess it.
 
 > **Dynamic model queries**: If the **qianwen-model-selector** skill or **QianWen CLI** (`qianwen models info <model>`) is available, use it for real-time model data. CLI requires authentication — see the **qianwen-usage** skill for login flow.
 
@@ -128,9 +103,9 @@ If `python3` is not found, try `python --version` or `py -3 --version`. If Pytho
 
 | Script | Purpose | Default Model |
 |--------|---------|---------------|
-| `scripts/analyze.py` | Image understanding, multi-image, video, thinking mode, high-res | `qwen3.7-plus` |
-| `scripts/reason.py` | Visual reasoning with chain-of-thought, video reasoning (always streaming) | `qvq-max` |
-| `scripts/ocr.py` | OCR text extraction from documents, receipts, tables | `qwen3.5-ocr` |
+| `scripts/analyze.py` | Image understanding, multi-image, video, thinking mode, high-res | Read the current default from the model catalog above |
+| `scripts/reason.py` | Visual reasoning with chain-of-thought, video reasoning (always streaming) | Read the current default from the model catalog above |
+| `scripts/ocr.py` | OCR text extraction from documents, receipts, tables | Read the current default from the model catalog above |
 
 **Input type fields** (use exactly one in `--request` JSON):
 
@@ -216,7 +191,7 @@ The API accepts: **HTTP/HTTPS URL**, **Base64 data URI**, and **`oss://` URL**. 
 | **Base64** (default) | Local files < 7 MB (images or short video clips) | Script auto-converts to `data:` URI |
 | **Temp upload** | Local files >= 7 MB | Add `--upload-files` flag → uploads to DashScope temp storage (`oss://` URL, 48h TTL) |
 
-> **Production**: Default temp storage has **48h TTL** and **100 QPS upload limit** — not suitable for production, high-concurrency, or load-testing. To use your own OSS bucket, set `QWEN_TMP_OSS_BUCKET` and `QWEN_TMP_OSS_REGION` in `.env`, install `pip install oss2`, and provide credentials via `QWEN_TMP_OSS_AK_ID` / `QWEN_TMP_OSS_AK_SECRET` or the standard `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`. Use a RAM user with least-privilege (`oss:PutObject` + `oss:GetObject` on target bucket only). The `--upload-files` flag is still required for vision scripts to trigger upload. If qianwen-ops-auth is installed, see its `references/custom-oss.md` for the full setup guide.
+> **Production**: Default temp storage has **48h TTL** and **100 QPS upload limit** — not suitable for production, high-concurrency, or load-testing. To use your own OSS bucket, set `QWEN_TMP_OSS_BUCKET` and `QWEN_TMP_OSS_REGION` in `.env`, install `pip install alibabacloud-oss-v2`, and provide credentials via `QWEN_TMP_OSS_AK_ID` / `QWEN_TMP_OSS_AK_SECRET` or the standard `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`. Use a RAM user with least-privilege (`oss:PutObject` + `oss:GetObject` on target bucket only). The `--upload-files` flag is still required for vision scripts to trigger upload. If qianwen-ops-auth is installed, see its `references/custom-oss.md` for the full setup guide.
 
 ## Input from Other Skills
 
@@ -227,27 +202,17 @@ When the input file comes from another skill's output (e.g., image-gen, video-ge
 
 ## Thinking Mode
 
-| Model | Thinking Default | Notes |
-|-------|-----------------|-------|
-| `qwen3.8-max` | **On** | Strongest flagship. Disable with `enable_thinking: false` for simple tasks. |
-| `qwen3.7-plus` | **On** | **Preferred default.** Disable with `enable_thinking: false` for simple tasks. |
-| `qwen3.7-flash` | **On** | High-perf flash. Disable with `enable_thinking: false` for simple tasks. |
-| `qwen3.6-plus` | **On** | Multimodal. Disable with `enable_thinking: false` for simple tasks. |
-| `qwen3.5-plus` / `qwen3.5-flash` | **On** | Disable with `enable_thinking: false` for simple tasks. |
-| `qwen3-vl-plus` / `qwen3-vl-flash` | Off | Enable with `enable_thinking: true`. |
-| `qvq-max` | Always on | **Streaming output required.** |
+Use the Qwen vision model catalog linked above for current thinking defaults and model compatibility. See [visual-reasoning.md](references/visual-reasoning.md) for execution details.
 
-See [visual-reasoning.md](references/visual-reasoning.md) for details.
+## OCR
 
-## OCR (qwen3.5-ocr)
-
-Default OCR model is `qwen3.5-ocr` — the latest recommended OCR model with PDF parsing, multi-turn conversation, and enhanced ID/card recognition. The legacy `qwen-vl-ocr` remains available via `--model qwen-vl-ocr`. Supports multi-language, skewed images, tables, formulas. See [ocr.md](references/ocr.md) for parameters and examples.
+Use the Qwen vision model catalog linked above for the current OCR default, alternatives, and model capabilities. See [ocr.md](references/ocr.md) for parameters and examples.
 
 ## Input Limits
 
-**Images**: BMP/JPEG/PNG/TIFF/WEBP/HEIC. Min 10px sides, aspect ratio <= 200:1. Max 20 MB (URL; Qwen3.8/3.7/3.6/3.5 & Qwen3-VL series) / 10 MB (others).
+**Images**: BMP/JPEG/PNG/TIFF/WEBP/HEIC. Min 10px sides, aspect ratio <= 200:1. Check the model catalog above for model-specific size limits.
 
-**Videos**: MP4/AVI/MKV/MOV/FLV/WMV. Duration 2s–2h (Qwen3.8/3.7/3.6/3.5 series) / 2s–1h (Qwen3-VL series) / 2s–10min (others). Max 2 GB (URL) / 10 MB (base64). fps range [0.1, 10], default 2.0.
+**Videos**: MP4/AVI/MKV/MOV/FLV/WMV. Check the model catalog above for model-specific duration and size limits. fps range [0.1, 10], default 2.0.
 
 ## Error Handling
 

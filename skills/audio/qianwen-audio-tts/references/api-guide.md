@@ -6,23 +6,13 @@
 
 ## Definition
 
-Text-to-speech synthesis service that produces natural, human-like voices. Supports **16+ system voices**, 10 languages, streaming real-time playback, **natural language instruction control** for tone and emotion, and custom voices via **voice cloning** (from audio samples) and **voice design** (from text descriptions). The key differentiator is the `instructions` parameter, which uses natural language to precisely control speech rate, emotion, and character personality.
+Text-to-speech synthesis service that produces natural, human-like voices. Supports **16+ system voices**, 10 languages, streaming real-time playback, **natural language instruction control** for tone and emotion, and custom voices via **voice cloning** (from audio samples) and **voice design** (from text descriptions). Instruction-control parameter names are model-specific; check the CDN model catalog before choosing between `instructions` and `instruction`.
 
 ---
 
 ## Use Cases
 
-| Scenario | Recommended Model | Notes |
-|----------|------------------|-------|
-| General speech synthesis / announcements | `qwen3-tts-flash` | Fast, multi-language, billed per character. |
-| Audiobooks / game dubbing / radio dramas | `qwen3-tts-instruct-flash` | Control emotion, rate, and character via `instructions`. |
-| High-quality professional TTS | `qwen-audio-3.0-tts-plus` | **Default**. Instruction control, voice cloning, multi-language. TP + PAYG. |
-| Low-latency real-time interaction | `qwen-audio-3.0-tts-flash` | PAYG-only; instruction control, voice cloning, optimized for speed. Specify `--model` explicitly. |
-| High-performance multi-language TTS | `cosyvoice-v3.5-flash` | Instruction control, 11 languages. Custom voices only. |
-| Ultra-expressive multi-language TTS | `cosyvoice-v3.5-plus` | Instruction control, 11 languages. Custom voices only. |
-| Brand voice customization (from text description) | `qwen3-tts-vd-2026-01-26` | Design a new voice from a text description without audio samples. |
-| Brand voice customization (from audio sample) | `qwen3-tts-vc-2026-01-22` | Clone a voice from audio samples with high fidelity. |
-| Navigation / notifications | `qwen3-tts-flash` | Short text, high frequency, low cost. |
+Fetch and read the current [Qwen audio TTS model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-audio-tts-models.md) for scenario recommendations, defaults, and basic model information. If CDN access fails, use the [local fallback](../cdn/references/qianwen-audio-tts-models.md).
 
 ---
 
@@ -77,11 +67,9 @@ resp = dashscope.MultiModalConversation.call(
 
 ### Instruction Control (CosyVoice v3.5 / Qwen-Audio-TTS)
 
-CosyVoice v3.5 and Qwen-Audio-TTS models support free-style instruction control via the `instruction` parameter (note: singular, not plural). Use natural language to describe dialect, emotion, pace, or character.
+Models marked as instruction-compatible in the CDN model catalog linked above support free-style control via the `instruction` parameter (note: singular, not plural). Use natural language to describe dialect, emotion, pace, or character. Models marked as custom-voice-only require a voice ID created via Voice Cloning or Voice Design.
 
-> **⚠️ v3.5 models** (`cosyvoice-v3.5-flash`, `cosyvoice-v3.5-plus`) do **NOT** support system voices. You must provide a custom voice ID created via Voice Cloning or Voice Design.
-
-> **Supported models for `instruction`**: `cosyvoice-v3.5-plus`, `cosyvoice-v3.5-flash`, `cosyvoice-v3-flash`, `qwen-audio-3.0-tts-plus`, `qwen-audio-3.0-tts-flash`.
+> Fetch and read the CDN model catalog linked above for the current models that support `instruction`.
 
 ### System Voice List
 
@@ -134,10 +122,10 @@ resp = dashscope.MultiModalConversation.call(
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `model` | Yes | Model ID. |
-| `text` | Yes | Text to synthesize. qwen3-tts-flash: max 600 characters. Qwen-TTS: max 512 tokens. |
+| `text` | Yes | Text to synthesize; fetch the CDN model catalog linked above for model-specific limits. |
 | `voice` | Yes | System voice ID, or cloned/designed voice name. |
 | `language_type` | No | Default: `Auto`. Specifying the exact language significantly improves synthesis quality over `Auto`. Supported: `Chinese`, `English`, `Japanese`, `Korean`, `French`, `German`, `Russian`, `Italian`, `Spanish`, `Portuguese`. |
-| `instructions` | No | Natural language instructions for speech control. Max 1,600 tokens. Chinese and English only. **Qwen3-TTS-Instruct-Flash only.** |
+| `instructions` | No | Natural language instructions for speech control; fetch the CDN model catalog linked above for current model compatibility and limits. |
 | `optimize_instructions` | No | When true, the system semantically enhances `instructions` for better naturalness. Requires `instructions` to be set. Default: false. |
 | `stream` | No | `false` = returns audio URL. `true` = streams Base64-encoded audio chunks. |
 
@@ -145,10 +133,10 @@ resp = dashscope.MultiModalConversation.call(
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `model` | Yes | Model ID: `cosyvoice-v3.5-flash`, `cosyvoice-v3.5-plus`, `qwen-audio-3.0-tts-plus`, `qwen-audio-3.0-tts-flash`, `cosyvoice-v3-flash`, `cosyvoice-v3-plus` |
+| `model` | Yes | Model ID; fetch the CDN model catalog linked above for the current list. |
 | `text` | Yes | Text to synthesize. Max 20,000 characters per call. |
 | `voice` | Yes | Voice ID (model-specific). See [Qwen-Audio-TTS voice list](https://platform.qianwenai.com/docs/api-reference/speech-synthesis/qwen-audio-tts/voice-list) and [CosyVoice voice list](https://platform.qianwenai.com/docs/api-reference/speech-synthesis/cosyvoice/voice-list). |
-| `instruction` | No | Free-style natural language instruction for speech control (dialect, emotion, pace, character). Supported by v3.5 and Qwen-Audio-TTS models. |
+| `instruction` | No | Free-style natural language instruction for speech control; fetch the CDN model catalog for compatibility. |
 | `language_hints` | No | Target language hint list, e.g. `["zh"]`. Supported: `zh`, `en`, `fr`, `de`, `ja`, `ko`, `ru`, `pt`, `th`, `id`, `vi`, `es`, `it`, `ms`, `fil`, `ar`. |
 | `format` | No | Audio format: `mp3` (default), `wav`, `pcm`, `opus`. |
 | `sample_rate` | No | Sample rate (Hz): 8000, 16000, 22050 (default), 24000, 44100, 48000. |
@@ -160,10 +148,10 @@ resp = dashscope.MultiModalConversation.call(
 
 1. **Audio URLs are valid for only 24 hours.** Download immediately after generation.
 2. **Specifying `language_type` significantly outperforms `Auto`.** When the text is in a single language, setting the exact language improves pronunciation accuracy and naturalness.
-3. **`instructions` only works with the Instruct model.** The parameter is exclusive to `qwen3-tts-instruct-flash`. It has no effect on other models.
+3. **`instructions` support is model-specific.** Fetch the CDN model catalog linked above before using it.
 4. **Voice cloning `target_model` must match the synthesis `model`.** Otherwise synthesis fails.
 5. **`SpeechSynthesizer` has been unified to `MultiModalConversation`.** In the DashScope Python SDK, the old `SpeechSynthesizer` interface has been replaced by `MultiModalConversation`. Parameters are fully compatible; only the interface name needs to change.
-6. **Qwen-TTS (legacy) is not available in cn-beijing.** Use `qwen3-tts-flash` or `qwen3-tts-instruct-flash` instead.
+6. **Model availability is region-specific.** Fetch the CDN model catalog linked above before choosing a model.
 7. **Streaming via HTTP** requires the header `X-DashScope-SSE: enable`. The Java SDK uses the `streamCall` interface.
 
 ---
@@ -171,13 +159,13 @@ resp = dashscope.MultiModalConversation.call(
 ## FAQ
 
 **Q: How do I choose between qwen3-tts-flash and qwen3-tts-instruct-flash?**
-A: Use flash for straightforward synthesis (announcements, navigation, reading aloud). Use instruct-flash when you need to control emotion, tone, and character expressiveness (audiobooks, dubbing). For the latest pricing comparison, see the [official pricing page](https://platform.qianwenai.com/docs/developer-guides/getting-started/pricing).
+A: Fetch and read the current CDN model catalog linked above for recommendations and capability differences.
 
 **Q: What is the difference between CosyVoice v3.5 and v3?**
-A: CosyVoice v3.5 adds free-style instruction control (`instruction` parameter), reduces first-packet latency, improves pronunciation accuracy and prosody, and expands language support to 11 languages (Chinese, English, German, French, Russian, Japanese, Korean, Portuguese, Thai, Indonesian, Vietnamese). The v3.5-plus variant offers ultra-high expressiveness, while v3.5-flash prioritizes performance.
+A: Fetch and read the current CDN model catalog linked above for the model comparison.
 
 **Q: How do I use CosyVoice v3.5 or Qwen-Audio-TTS for non-real-time synthesis?**
-A: Run `scripts/tts_cosyvoice.py`. For PAYG NRT models, the script calls the public HTTP API directly. Token Plan keys are **not** supported by `tts_cosyvoice.py` (it will reject them); Token Plan users should use `tts.py --model qwen-audio-3.0-tts-plus` instead. See the [cosyvoice-guide.md](cosyvoice-guide.md) for full details.
+A: Use `scripts/tts_cosyvoice.py` for CosyVoice and `scripts/tts.py` for Qwen-Audio-TTS. Token Plan keys are **not** supported by `tts_cosyvoice.py`; Token Plan users should use `tts.py` with a supported model from the [CDN Token Plan model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-token-plan-models.md). See the [CosyVoice guide](cosyvoice-guide.md) and the CDN audio model catalog linked above for details. If CDN access fails, use the [local fallback](../cdn/references/qianwen-token-plan-models.md).
 
 **Q: How do I make synthesized speech sound more natural?**
 A: (1) Set `language_type` to match the text language. (2) Use the instruct model with `instructions` describing the desired style. (3) Enable `optimize_instructions=True` to let the system enhance the instructions.
@@ -186,7 +174,7 @@ A: (1) Set `language_type` to match the text language. (2) Use the instruct mode
 A: Cloning (VC) replicates a voice from an audio sample — suitable for reproducing an existing voice. Design (VD) creates a new voice from a text description — suitable for designing brand voices from scratch.
 
 **Q: What is the maximum text length per synthesis call?**
-A: qwen3-tts-flash supports up to 600 characters. Qwen-TTS supports up to 512 tokens. For longer text, split into segments and concatenate the audio files.
+A: Model limits are listed in the CDN model catalog linked above. For longer text, split it into segments and concatenate the audio files.
 
 **Q: How do I achieve real-time audio playback?**
 A: Set `stream=True`. The Python SDK returns a generator; iterate over it to receive Base64-encoded audio chunks for decoding and playback.

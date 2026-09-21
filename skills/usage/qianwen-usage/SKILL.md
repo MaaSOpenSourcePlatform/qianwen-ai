@@ -1,11 +1,11 @@
 ---
 name: qianwen-usage
-description: "Manage account auth and query usage/billing/subscription. Use for: login, logout, check usage, view billing, free tier quota, Token Plan status, pay-as-you-go costs, settled bills, model cost breakdown, call logs (which requests failed, 4xx/5xx errors, request latency, recent models called, request-id lookup), subscription status, order history, team seats, PAYG spending limit. Skip for: model browsing, payment/recharge (use qianwen-payment), non-account tasks."
+description: "Manage account auth and query usage/billing/subscription. Use for: login, logout, check usage, view billing, free tier quota, Token Plan status, pay-as-you-go costs, billing summary, model cost breakdown, call logs (which requests failed, 4xx/5xx errors, request latency, recent models called, request-id lookup), subscription status, order history, team seats, PAYG spending limit. Skip for: model browsing, payment/recharge (use qianwen-payment), non-account tasks."
 ---
 
-# QianWen Usage
+# QianWenAI Usage
 
-Unified entry point for QianWen account, usage, billing, and subscription: auth status, usage summary, free tier quota, Token Plan, pay-as-you-go, settled bills, model cost breakdown, subscription status, order history, team seats, and PAYG spending limit.
+Unified entry point for QianWenAI account, usage, billing, and subscription: auth status, usage summary, free tier quota, Token Plan, pay-as-you-go, billing summary, model cost breakdown, subscription status, order history, team seats, and PAYG spending limit.
 
 ## Prerequisites
 
@@ -24,13 +24,6 @@ npm install -g @qianwenai/qianwen-cli
 Node.js >= 18 required.
 
 - Authentication: No configuration needed on first use. The CLI handles non-TTY detection and safe login automatically (see Authentication Flow below).
-
-### Environment Variables
-
-| Variable                  | Description                                                                                  |
-|---------------------------|----------------------------------------------------------------------------------------------|
-| `QIANWEN_KEYRING`         | Set to `plaintext`, `no`, `0`, `false`, or `off` to opt out of OS keychain credential storage. |
-| `QIANWEN_CREDENTIALS_DIR` | Override file-based credential directory (default: `~/.qianwen/credentials`).                |
 
 ## Execution Baseline
 
@@ -161,6 +154,8 @@ qianwen usage breakdown --model qwen-plus --period 2026-03 --granularity month
 qianwen usage breakdown --model qwen3.6-plus --format json
 ```
 
+Note: breakdown shows PAYG consumption only. Free tier usage is not included — use `usage free-tier` for current quota state.
+
 **`qianwen usage free-tier`** — View free tier quota details
 
 ```bash
@@ -168,14 +163,14 @@ qianwen usage free-tier
 qianwen usage free-tier --format json
 ```
 
-**`qianwen usage payg`** — View pay-as-you-go billing details
+**`qianwen usage payg`** — View pay-as-you-go usage and costs by model
 
-Shows **real-time, not-yet-settled** pay-as-you-go consumption. For finalized, settled billing cycles, use `qianwen billing summary` (see Billing Commands below).
+Shows pay-as-you-go consumption for the current period. For historical billing cycles, use `qianwen billing summary` (see Billing Commands below).
 
 ```bash
 qianwen usage payg
 qianwen usage payg --format json
-qianwen usage payg --period month --format json   # Recommended: current month real-time PAYG
+qianwen usage payg --period month --format json   # Recommended: current month PAYG
 ```
 
 **`qianwen usage logs`** — Browse paginated call logs (per-request history), filterable by time, model, and status
@@ -183,7 +178,7 @@ qianwen usage payg --period month --format json   # Recommended: current month r
 Use this for **request-level** questions — "which calls failed?", "show me the 4xx/5xx errors", "how long did those requests take?", "which models did I call recently?", "look up this request id". This is distinct from `usage summary`/`breakdown` (aggregate token/cost) — route failure-diagnosis, latency, and call-history questions here, not to summary/breakdown.
 
 ```bash
-qianwen usage logs --period month --format json
+qianwen usage logs --period 7d --format json
 qianwen usage logs --period 24h --status 4xx --status 5xx --format json   # recent client/server errors
 qianwen usage logs --model qwen-plus --page 2 --page-size 50 --format json
 qianwen usage logs --from 2026-07-25 --to 2026-08-07 --format json         # explicit range (must be ≤ 14 days)
@@ -192,7 +187,7 @@ qianwen usage logs --request-id 8c81644f-... --format json                # exac
 
 Options:
 - `--from` / `--to` — date range (`YYYY-MM-DD` or RFC3339)
-- `--period <preset>` — `1h`, `24h`, `7d`, `today`, `yesterday`, `week`, `month`, … (same preset family as `usage summary`)
+- `--period <preset>` — `1h`, `24h`, `7d`, `today`, `yesterday`, `week`, `month`, … (same preset family as `usage summary`). **⚠️ The resolved range must be ≤ 14 days.** Presets like `month` (after mid-month), `last-month`, `quarter`, and `year` will exceed the limit and return `INVALID_ARGUMENT`. Prefer short presets: `1h`, `24h`, `7d`, `today`, `yesterday`, `week`.
 - `--model <id>` — filter by model; **repeatable** (pass multiple `--model` flags to include several models)
 - `--status <type>` — status filter: `0` (cancelled), `2xx` (success), `4xx` (client error), `5xx` (server error); **repeatable**
 - `--request-id <id>` — exact request id; **when set, all other filters are ignored**
@@ -262,23 +257,16 @@ qianwen usage breakdown --model qwen3.6-plus --period month
 
 ### Billing Commands
 
-**`qianwen billing summary`** — Settled bill totals for an inclusive `YYYY-MM` cycle window
+**`qianwen billing summary`** — Bill totals for an inclusive `YYYY-MM` cycle window
 
 ```bash
 qianwen billing summary --from 2026-05 --to 2026-07 --format json
 qianwen billing summary --charge-type payg --format json   # payg | subscription | all (default)
 ```
 
-Returns **settled bills** (finalized billing cycles). This is different from `qianwen usage payg`, which shows **real-time, not-yet-settled** consumption of the current period — use `usage payg` for "how much have I spent so far" and `billing summary` for "what was billed in past cycles".
-
 `cycles` covers **every month** in the `--from`..`--to` window, in order, with no gaps. Each cycle carries `billingCycle`, `aftertaxAmount`, and a `settled` flag. `chargeType` is the internal value — `all`, `prepaid` for subscription, `postpaid` for payg; amounts are decimal strings.
 
-Read `settled` to tell two very different states apart:
-
-- `settled: true` → the cycle has a real settled bill. `aftertaxAmount` is the actual amount, and `"0.000000"` means a genuine zero bill (the CLI renders it as `¥0`). Report it as a real amount, not "No bill".
-- `settled: false` → the server returned no bill for that month; `aftertaxAmount` is `null`. The CLI renders this month as `No bill`; report it as no bill for that month, never as `¥0`.
-
-`totals.aftertaxAmount` sums only the settled cycles (unsettled months contribute nothing).
+If `settled` appears in the JSON output, it indicates whether bill data exists for that cycle (`true` = exists, `false` = none). When `true`, report `aftertaxAmount` as a real amount (including ¥0).
 
 ```json
 {
@@ -503,8 +491,6 @@ Returns structured JSON with three sections:
 }
 ```
 
-> **Note on `token_plan`**: The China site (qianwen CLI) returns the `token_plan` branch as shown above. Coding Plan is an international-site (qwencloud) concept — the China site does not generate a Coding Plan display branch.
-
 ### Text output example (`--format text`)
 
 ```bash
@@ -529,10 +515,10 @@ Resets:     2026-06-01
 
 -- Pay-as-you-go · 2026-04-01 → 2026-04-10 -------------------------------
 Model                Usage              Cost
-qwen3.6-plus         480K tok           $0.38
-qwen-plus            460K tok           $0.13
+qwen3.6-plus         480K tok           ¥0.38
+qwen-plus            460K tok           ¥0.13
 --------------------------------------------------------------------------
-Total                —                  $0.51
+Total                —                  ¥0.51
 ```
 
 ### ⚠️ CRITICAL: How to present output to the user
@@ -560,8 +546,8 @@ Total                —                  $0.51
 Your QianWen usage for April:
 
 **Free Tier**: qwen3.6-plus has 85% remaining (850K / 1M tokens), wan2.6-t2i has 76% remaining (38 / 50 images).
-**Token Plan (PRO)**: 8% used this month (82.5K / 90K requests).
-**Pay-as-you-go**: $0.51 total — qwen3.6-plus $0.38, qwen-plus $0.13.
+**Token Plan**: 16% used (21K / 25K Credits remaining).
+**Pay-as-you-go**: ¥0.51 total — qwen3.6-plus ¥0.38, qwen-plus ¥0.13.
 
 ---
 
@@ -609,7 +595,7 @@ The QianWen CLI handles update notifications natively; no additional stderr sign
 ## Implementation Notes
 
 - **Pay-as-you-go**: API returns total usage only (no input/output split)
-- **Token Plan**: Aggregate request counts at plan level (no per-model breakdown)
+- **Token Plan**: Aggregate credit consumption at plan level (no per-model breakdown)
 - **logout**: Revokes server-side session and clears local credentials (keychain + file). Server-side call is best-effort — local logout always succeeds.
 - **Authentication**: Uses OAuth 2.0 Device Authorization Grant with PKCE. Credentials stored in OS keychain when available, with encrypted file fallback.
 - **breakdown --model is required**: Unlike the previous Python implementation, the CLI requires `--model` for breakdown. To query all models' usage, use `qianwen usage summary` instead.

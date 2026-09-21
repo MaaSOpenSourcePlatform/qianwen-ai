@@ -12,7 +12,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from qianwen_lib import resolve_file  # noqa: E402
+from qianwen_lib import load_cdn_model_config, resolve_file  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Mode constants
@@ -25,14 +25,50 @@ MODE_R2V = "r2v"
 MODE_VACE = "vace"
 MODE_VIDEO_EDIT = "videoedit"
 
-DEFAULT_MODELS: dict[str, str] = {
-    MODE_T2V: "happyhorse-1.1-t2v",
-    MODE_I2V: "happyhorse-1.1-i2v",
-    MODE_KF2V: "wan2.2-kf2v-flash",
-    MODE_R2V: "happyhorse-1.1-r2v",
-    MODE_VACE: "wanx2.1-vace-plus",
-    MODE_VIDEO_EDIT: "wan2.7-videoedit",
-}
+_MODEL_CONFIG_FILE = "qianwen-video-generation-config.json"
+_MODEL_CONFIG_KEYS = (
+    "default_models",
+    "wan27_t2v_models",
+    "wan27_i2v_models",
+    "happyhorse_i2v_models",
+    "happyhorse_r2v_models",
+    "wan27_r2v_models",
+    "wan30_video_models",
+    "video_edit_models",
+)
+
+
+def _model_config() -> dict[str, Any]:
+    return load_cdn_model_config(_MODEL_CONFIG_FILE, required_keys=_MODEL_CONFIG_KEYS)
+
+
+def _model_ids(key: str) -> frozenset[str]:
+    values = _model_config()[key]
+    if not isinstance(values, list) or not all(isinstance(item, str) for item in values):
+        raise RuntimeError(f"Invalid video model configuration: {key} must be a string array")
+    return frozenset(values)
+
+
+def get_default_model(mode: str) -> str:
+    defaults = _model_config()["default_models"]
+    if not isinstance(defaults, dict):
+        raise RuntimeError("Invalid video model configuration: default_models must be an object")
+    model = defaults.get(mode)
+    if not isinstance(model, str) or not model:
+        raise RuntimeError(f"Invalid video model configuration: missing default for {mode}")
+    return model
+
+
+def is_wan27_i2v_model(model: str) -> bool:
+    return model in _model_ids("wan27_i2v_models")
+
+
+def is_happyhorse_i2v_model(model: str) -> bool:
+    return model in _model_ids("happyhorse_i2v_models")
+
+
+def is_video_edit_model(model: str) -> bool:
+    return model in _model_ids("video_edit_models")
 
 # wan2.7-style models use resolution+ratio (instead of size).
 # NOTE: happyhorse-1.0-t2v and happyhorse-1.1-t2v keep sharing the wan2.7-t2v structure (resolution+ratio).
@@ -40,29 +76,20 @@ DEFAULT_MODELS: dict[str, str] = {
 # because their API spec diverges significantly from wan2.7-i2v
 # (no negative_prompt / no prompt_extend / no ratio / media must be exactly
 # one {type:'first_frame'}). See _build_happyhorse_i2v_payload below.
-_WAN27_T2V_MODELS = frozenset({"wan2.7-t2v", "wan2.7-t2v-2026-06-12",
-                               "happyhorse-1.0-t2v", "happyhorse-1.1-t2v"})
-_WAN27_I2V_MODELS = frozenset({"wan2.7-i2v"})
-_HAPPYHORSE_I2V_MODELS = frozenset({"happyhorse-1.0-i2v", "happyhorse-1.1-i2v"})
-
 # happyhorse-r2v uses media[{type:reference_image, url}] + resolution+ratio
 # (different from wan2.6-r2v which uses reference_urls + size).
-_HAPPYHORSE_R2V_MODELS = frozenset({"happyhorse-1.0-r2v", "happyhorse-1.1-r2v"})
 
 # wan2.7-r2v uses input.media = [{type, url}, ...] with mixed reference types
 # (reference_image / reference_video / reference_audio, up to 5) + resolution
 # + duration + prompt_extend + watermark. NO `ratio` (auto-derived from refs).
 # Distinct from happyhorse-r2v (reference_image only) and wan2.6-r2v (reference_urls+size).
-_WAN27_R2V_MODELS = frozenset({"wan2.7-r2v"})
 
 # wan3.0-video / wan3.0-video-prime are all-in-one models supporting both t2v
 # (input.prompt only) and i2v (input.media=[{type:reference_image, url}]).
 # parameters: resolution (480P~1080P) + ratio + duration (<=30s).
 # Routed by model id inside build_t2v_payload / build_i2v_payload.
-_WAN30_VIDEO_MODELS = frozenset({"wan3.0-video", "wan3.0-video-prime"})
 
 # Video-edit models share a unified payload (media=[1 video]+[refs], no `function`).
-_VIDEO_EDIT_MODELS = frozenset({"happyhorse-1.0-video-edit", "wan2.7-videoedit"})
 
 
 ENDPOINTS: dict[str, str] = {
@@ -85,11 +112,11 @@ def detect_mode(request: dict[str, Any]) -> str:
     # Highest priority: video-edit models do NOT have `function` field;
     # detect by model id so they don't fall through to MODE_VACE or MODE_I2V.
     model = request.get("model", "")
-    if model in _VIDEO_EDIT_MODELS:
+    if is_video_edit_model(model):
         return MODE_VIDEO_EDIT
     # wan3.0-video / wan3.0-video-prime are all-in-one: pick t2v vs i2v by whether
     # a reference image is supplied (media / img_url / reference_image).
-    if model in _WAN30_VIDEO_MODELS:
+    if model in _model_ids("wan30_video_models"):
         if (request.get("media") or request.get("img_url")
                 or request.get("reference_image")
                 or request.get("reference_urls")):
@@ -100,7 +127,8 @@ def detect_mode(request: dict[str, Any]) -> str:
     if request.get("reference_urls"):
         return MODE_R2V
     # happyhorse-r2v / wan2.7-r2v may also be triggered by model id alone
-    if model in _HAPPYHORSE_R2V_MODELS or model in _WAN27_R2V_MODELS:
+    if (model in _model_ids("happyhorse_r2v_models")
+            or model in _model_ids("wan27_r2v_models")):
         return MODE_R2V
     # wan2.7-i2v uses media array or first_clip_url
     if request.get("media") or request.get("first_clip_url"):
@@ -157,10 +185,10 @@ def resolve_request_urls(request: dict[str, Any], api_key: str, model: str,
 def build_t2v_payload(request: dict[str, Any], model: str) -> dict[str, Any]:
     """Build payload for text-to-video generation (wan2.6/wan2.7/happyhorse-t2v)."""
     # wan3.0-video / wan3.0-video-prime use their own unified builder.
-    if model in _WAN30_VIDEO_MODELS:
+    if model in _model_ids("wan30_video_models"):
         return _build_wan30_video_payload(request, model)
 
-    is_v27 = model in _WAN27_T2V_MODELS
+    is_v27 = model in _model_ids("wan27_t2v_models")
 
     input_obj: dict[str, Any] = {"prompt": request.get("prompt", "")}
     if request.get("negative_prompt"):
@@ -200,15 +228,15 @@ def build_i2v_payload(request: dict[str, Any], model: str) -> dict[str, Any]:
       3. wan2.6-i2v fallback (single img_url)
     """
     # 1) happyhorse-i2v has its own strict spec; never fall through.
-    if model in _HAPPYHORSE_I2V_MODELS:
+    if is_happyhorse_i2v_model(model):
         return _build_happyhorse_i2v_payload(request, model)
 
     # 1b) wan3.0-video / wan3.0-video-prime use their own unified builder.
-    if model in _WAN30_VIDEO_MODELS:
+    if model in _model_ids("wan30_video_models"):
         return _build_wan30_video_payload(request, model)
 
     # 2) wan2.7-i2v uses media array
-    is_v27 = model in _WAN27_I2V_MODELS
+    is_v27 = is_wan27_i2v_model(model)
     if is_v27 or request.get("media") or request.get("first_clip_url"):
         return _build_i2v_v27_payload(request, model)
 
@@ -376,10 +404,10 @@ def build_kf2v_payload(request: dict[str, Any], model: str) -> dict[str, Any]:
 def build_r2v_payload(request: dict[str, Any], model: str) -> dict[str, Any]:
     """Build payload for reference-based role-play video generation."""
     # wan2.7-r2v uses input.media = [{type, url}] mixed refs (image/video/audio).
-    if model in _WAN27_R2V_MODELS:
+    if model in _model_ids("wan27_r2v_models"):
         return _build_r2v_wan27_payload(request, model)
     # happyhorse-r2v uses a different payload structure (media array + resolution+ratio).
-    if model in _HAPPYHORSE_R2V_MODELS:
+    if model in _model_ids("happyhorse_r2v_models"):
         return _build_r2v_happyhorse_payload(request, model)
 
     input_obj: dict[str, Any] = {

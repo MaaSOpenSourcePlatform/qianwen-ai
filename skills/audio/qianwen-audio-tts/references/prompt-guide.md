@@ -17,9 +17,18 @@ TTS quality is highly sensitive to punctuation and structure:
 
 For mixed-language text, set `language_type: "Auto"`.
 
-## Instructions Templates (qwen3-tts-instruct-flash only)
+## Instruction Templates
 
-| Scenario | Instructions |
+Use these templates only with a model currently marked instruction-compatible in the [CDN model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-audio-tts-models.md). If CDN access fails, use the [local fallback](../cdn/references/qianwen-audio-tts-models.md).
+
+The request field name depends on the selected model:
+
+- For models listed under `instructions` (plural), use that field; `optimize_instructions` applies where documented.
+- For models listed under `instruction` (singular), use that field.
+
+Do not interchange `instructions` and `instruction`.
+
+| Scenario | Instruction text |
 |----------|-------------|
 | News anchor | `Professional, authoritative tone. Clear enunciation, moderate pacing.` |
 | Audiobook | `Warm, engaging narration. Varied pacing — slow for drama, faster for action.` |

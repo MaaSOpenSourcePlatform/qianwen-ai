@@ -12,13 +12,28 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from qianwen_lib import resolve_file  # noqa: E402
+from qianwen_lib import load_cdn_model_config, resolve_file  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Model classification constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_MODEL = "wan2.7-image"
+_MODEL_CONFIG_FILE = "qianwen-image-generation-config.json"
+_MODEL_CONFIG_KEYS = (
+    "default_model",
+    "i2i_default_model",
+    "image_edit_models",
+    "multi_func_models",
+    "i2i_models",
+    "qwen_image_edit_models",
+    "qwen_image_edit_prefixes",
+    "qwen_image_30_models",
+    "qwen_t2i_models",
+    "qwen_image_edit_single_output_models",
+    "qwen_reference_required_models",
+    "z_image_models",
+)
+
 DEFAULT_SIZE = "1280*1280"
 
 SYNC_PATH = "/services/aigc/multimodal-generation/generation"
@@ -26,34 +41,39 @@ ASYNC_PATH = "/services/aigc/image-generation/generation"
 I2I_ASYNC_PATH = "/services/aigc/image2image/image-synthesis"
 T2I_ASYNC_PATH = "/services/aigc/text2image/image-synthesis"
 
-_IMAGE_EDIT_MODELS: frozenset[str] = frozenset({"wan2.6-image"})
-_MULTI_FUNC_MODELS: frozenset[str] = frozenset({
-    "wan2.7-image-pro", "wan2.7-image",
-})  # Support both t2i and image editing, no reference_images required
-_I2I_MODELS: frozenset[str] = frozenset({"wan2.5-i2i-preview"})
-_QWEN_IMAGE_EDIT_MODELS: frozenset[str] = frozenset({
-    "qwen-image-3.0-pro", "qwen-image-3.0",
-    "qwen-image-2.0-pro", "qwen-image-2.0",
-    "qwen-image-edit-max", "qwen-image-edit-plus", "qwen-image-edit",
-})
-_QWEN_IMAGE_EDIT_PREFIXES: tuple[str, ...] = (
-    "qwen-image-3.0-pro-", "qwen-image-3.0-",
-    "qwen-image-2.0-pro-", "qwen-image-2.0-",
-    "qwen-image-edit-max-", "qwen-image-edit-plus-", "qwen-image-edit-",
-)
-# qwen-image-3.0 series: exclusive API features (enable_thinking, prompt_extend_mode)
-# and NO default size (model auto-recommends resolution when size is omitted).
-_QWEN_IMAGE_30_MODELS: frozenset[str] = frozenset({"qwen-image-3.0-pro", "qwen-image-3.0"})
-_QWEN_T2I_MODELS: frozenset[str] = frozenset({"qwen-image-plus", "qwen-image-max"})
 _QWEN_T2I_VALID_SIZES: frozenset[str] = frozenset({
     "1664*928", "1472*1104", "1328*1328", "1104*1472", "928*1664",
 })
-_QWEN_IMAGE_EDIT_SINGLE_OUTPUT: frozenset[str] = frozenset({"qwen-image-edit"})
 
-# z-image-turbo: open-source SOTA T2I (6B params, 8-step inference).
-# Sync-only; payload allows ONLY a single text content per message;
-# parameters accept ONLY {size, prompt_extend, seed} -- NO `n`, NO reference images.
-_Z_IMAGE_MODELS: frozenset[str] = frozenset({"z-image-turbo"})
+
+def _model_config() -> dict[str, Any]:
+    return load_cdn_model_config(_MODEL_CONFIG_FILE, required_keys=_MODEL_CONFIG_KEYS)
+
+
+def _model_ids(key: str) -> frozenset[str]:
+    values = _model_config()[key]
+    if not isinstance(values, list) or not all(isinstance(item, str) for item in values):
+        raise RuntimeError(f"Invalid image model configuration: {key} must be a string array")
+    return frozenset(values)
+
+
+def _model_prefixes(key: str) -> tuple[str, ...]:
+    return tuple(_model_ids(key))
+
+
+def _default_model(key: str = "default_model") -> str:
+    value = _model_config()[key]
+    if not isinstance(value, str) or not value:
+        raise RuntimeError(f"Invalid image model configuration: {key} must be a string")
+    return value
+
+
+def default_model() -> str:
+    return _default_model()
+
+
+def i2i_default_model() -> str:
+    return _default_model("i2i_default_model")
 
 
 # ---------------------------------------------------------------------------
@@ -62,34 +82,34 @@ _Z_IMAGE_MODELS: frozenset[str] = frozenset({"z-image-turbo"})
 
 def is_image_edit_model(model: str) -> bool:
     """Return True if model is a Wan image-editing model (requires reference images)."""
-    return model in _IMAGE_EDIT_MODELS
+    return model in _model_ids("image_edit_models")
 
 
 def is_multi_func_model(model: str) -> bool:
     """Return True if model is a multi-function model (wan2.7 series, supports t2i + editing)."""
-    return model in _MULTI_FUNC_MODELS
+    return model in _model_ids("multi_func_models")
 
 
 def is_i2i_model(model: str) -> bool:
     """Return True if model uses the dedicated image-to-image async endpoint."""
-    return model in _I2I_MODELS
+    return model in _model_ids("i2i_models")
 
 
 def is_qwen_image_edit_model(model: str) -> bool:
     """Return True if model is a Qwen image-editing model (includes snapshot versions)."""
-    if model in _QWEN_IMAGE_EDIT_MODELS:
+    if model in _model_ids("qwen_image_edit_models"):
         return True
     # Support snapshot versions like qwen-image-2.0-pro-2026-03-03
-    return model.startswith(_QWEN_IMAGE_EDIT_PREFIXES)
+    return model.startswith(_model_prefixes("qwen_image_edit_prefixes"))
 
 
 def is_qwen_t2i_model(model: str) -> bool:
     """Return True if model is a Qwen text-to-image model (async-only)."""
-    return model in _QWEN_T2I_MODELS
+    return model in _model_ids("qwen_t2i_models")
 
 def is_z_image_model(model: str) -> bool:
     """Return True if model is the z-image series (sync-only, single-text-content)."""
-    return model in _Z_IMAGE_MODELS
+    return model in _model_ids("z_image_models")
 
 
 
@@ -168,23 +188,23 @@ def build_payload(req: dict[str, Any], model: str, api_key: str) -> dict[str, An
         if not enable_interleave and not images:
             print(
                 f"Warning: {model} requires reference_images or enable_interleave=true. "
-                f"Falling back to {DEFAULT_MODEL} for text-to-image.",
+                f"Falling back to {default_model()} for text-to-image.",
                 file=sys.stderr,
             )
-            model = DEFAULT_MODEL
+            model = default_model()
             req["model"] = model
             is_wan_edit = False
     elif is_qwen_edit:
         images = req.get("reference_images") or []
         if not images and req.get("reference_image"):
             images = [req["reference_image"]]
-        if not images and model in _QWEN_IMAGE_EDIT_SINGLE_OUTPUT | {"qwen-image-edit-max", "qwen-image-edit-plus"}:
+        if not images and model in _model_ids("qwen_reference_required_models"):
             print(
                 f"Warning: {model} requires reference_images for editing. "
-                f"Falling back to {DEFAULT_MODEL} for text-to-image.",
+                f"Falling back to {default_model()} for text-to-image.",
                 file=sys.stderr,
             )
-            model = DEFAULT_MODEL
+            model = default_model()
             req["model"] = model
             is_qwen_edit = False
 
@@ -258,7 +278,7 @@ def build_payload(req: dict[str, Any], model: str, api_key: str) -> dict[str, An
         if not enable_sequential and req.get("color_palette"):
             parameters["color_palette"] = req["color_palette"]
     elif is_qwen_edit:
-        is_qwen_30 = model in _QWEN_IMAGE_30_MODELS
+        is_qwen_30 = model in _model_ids("qwen_image_30_models")
         if is_qwen_30:
             # qwen-image-3.0 series: NO default size -- only pass size when explicitly
             # provided, so the model auto-recommends resolution otherwise.
@@ -267,7 +287,7 @@ def build_payload(req: dict[str, Any], model: str, api_key: str) -> dict[str, An
                 parameters["size"] = req["size"]
         else:
             parameters = {"size": req.get("size", "1024*1024")}
-        if model in _QWEN_IMAGE_EDIT_SINGLE_OUTPUT:
+        if model in _model_ids("qwen_image_edit_single_output_models"):
             parameters["n"] = 1
         else:
             parameters["n"] = req.get("n", 1)
@@ -351,7 +371,7 @@ def build_t2i_payload(req: dict[str, Any], model: str) -> dict[str, Any]:
 
     # Validate n parameter: qwen-image-plus/max only support n=1 (fixed)
     n_value = req.get("n", 1)
-    if model in ("qwen-image-plus", "qwen-image-max") and n_value != 1:
+    if model in _model_ids("qwen_t2i_models") and n_value != 1:
         print(
             f"Warning: {model} only supports n=1 (fixed). Your value ({n_value}) will be ignored.",
             file=sys.stderr,

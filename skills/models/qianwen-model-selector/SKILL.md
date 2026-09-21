@@ -1,7 +1,7 @@
 ---
 name: qianwen-model-selector
 description: "Recommend the best Qwen model and parameters. TRIGGER when: choosing between Qwen models, comparing Qwen model pricing, understanding Qwen model capabilities, checking usage or billing, viewing cost history, when an execution skill needs model selection advice, or user explicitly invokes this skill by name (e.g. use qianwen-model-selector). DO NOT TRIGGER when: non-Qwen model discussions (OpenAI, Gemini, etc.), general AI questions unrelated to Qwen."
-compatibility: "Advisory skill, no execution dependencies. Cursor: auto-loaded. Claude Code: read this skill's SKILL.md before first use."
+compatibility: "Advisory skill. CDN snapshot lookup has no local dependency; real-time model and account queries require QianWen CLI and Node.js >= 18. Cursor: auto-loaded. Claude Code: read this skill's SKILL.md before first use."
 ---
 
 # Qwen Model Selector (Advisor)
@@ -36,7 +36,7 @@ print('token-plan' if key.startswith('sk-sp-') else 'payg' if key else 'not-set'
 
 | Output | Billing mode | Action |
 |--------|-------------|--------|
-| `token-plan` | Token Plan (Credits) | Select only from [Token Plan list](references/recommendation-matrix.md#token-plan-models). Default to Team superset when edition unknown. |
+| `token-plan` | Token Plan (Credits) | Fetch the current [Token Plan model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-token-plan-models.md) and select only from it. Default to Team superset when edition unknown. If CDN access fails, use the [local fallback](cdn/references/qianwen-token-plan-models.md). |
 | `payg` | Pay-as-you-go | Full model catalog available; continue below. |
 | `not-set` | No key configured | **Do not block.** Ask the user: "Which approach do you plan to use? (1) Standard PAYG key (2) Token Plan key (3) Skip for now — just browse recommendations." Proceed based on their choice. |
 
@@ -47,23 +47,29 @@ This skill operates in two modes:
 
 1. **Interactive advisory** — asks diagnostic questions to recommend the right model (see Diagnostic Flow).
 2. **Cross-skill resolution** — provides a fast-path model lookup for execution skills that need a model
-   decision without user interaction (see [recommendation-matrix.md](references/recommendation-matrix.md)).
+   decision without user interaction. Fetch the
+   [CDN recommendations](https://alioth.alicdn.com/skills-info/models/references/qianwen-model-recommendations.md)
+   first; if CDN access fails, use the
+   [local fallback](cdn/references/qianwen-model-recommendations.md).
 
-Do not fabricate model names — only recommend models listed in this skill or returned by CLI.
+Do not fabricate model names — only recommend models listed in the CDN model catalogs or returned by CLI.
 This skill is part of **QianWen-AI/qianwen-ai**.
 
 ## Skill directory
 
-Load on demand. Do not fetch external URLs unless the user explicitly asks for the latest data.
+Load on demand. Fetch the documented CDN model catalogs when model lists, defaults, or recommendations are needed. Do not fetch other external URLs unless the user explicitly asks for the latest data.
+
+Every path under `cdn/` is a local fallback, not the primary source. For `cdn/<path>`, first fetch
+`https://alioth.alicdn.com/skills-info/models/<path>` and use the local file only if that CDN request fails.
 
 | Location                                  | Purpose                                                                          |
 |-------------------------------------------|----------------------------------------------------------------------------------|
 | `references/cli-usage.md`                 | **CLI-first data strategy**: when to use CLI, 3-step login flow, display rules   |
 | `references/error-handling.md`            | CLI error classification & recovery actions (auth, not-found, network, ...)      |
-| `references/recommendation-matrix.md`     | Full model recommendation tables, Cross-Skill Resolution, Token Plan, Thinking |
+| [CDN model recommendations](https://alioth.alicdn.com/skills-info/models/references/qianwen-model-recommendations.md) | Cross-domain recommendations and Token Plan constraints; if unavailable, use the [local fallback](cdn/references/qianwen-model-recommendations.md) |
 | `references/pricing-disclaimer.md`        | PAYG only: pricing disclaimer (CN/EN) + console links                            |
-| `references/pricing.md`                   | PAYG only: pricing structural overview (offline snapshot)                       |
-| `references/model-list.md`                | PAYG only: model catalog (offline snapshot)                                     |
+| `references/pricing.md`                   | Stable billing units, cost caveats, and CDN pricing fallback                    |
+| [CDN model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-model-list.md) | Cross-domain model catalog snapshot; if unavailable, use the [local fallback](cdn/references/qianwen-model-list.md) |
 | `references/sources.md`                   | Official documentation URLs (manual lookup only)                                 |
 
 ## Prerequisites
@@ -81,8 +87,10 @@ If not installed:
 npm install -g @qianwenai/qianwen-cli
 ```
 
-Node.js >= 18 required. Without CLI you can still answer general navigation questions from offline
-snapshots, but **you cannot answer "latest", "exact price", or "specific model details" questions**.
+Node.js >= 18 is required for the CLI. Without CLI, you can still answer point-in-time general
+navigation and basic model-information questions from the CDN catalogs. You cannot verify current
+availability, exact current prices, capability-search results beyond the snapshot, or account-specific
+quota information.
 
 ## Security & Credential Model
 
@@ -108,17 +116,17 @@ the recovery actions in the higher tier first.**
 
 | Question type                                                  | Primary source                                          | Notes                                                |
 |----------------------------------------------------------------|---------------------------------------------------------|------------------------------------------------------|
-| General navigation ("which family for text chat?")             | SKILL.md `Default` table + `recommendation-matrix.md`   | Offline-answerable                                   |
-| **Latest / exact / specific** (price, model details, quota)    | **CLI MUST be used** — see `cli-usage.md`               | Snapshots are stale; never invent numbers            |
+| General navigation or point-in-time basic model details       | [CDN recommendations and domain catalogs](https://alioth.alicdn.com/skills-info/models/references/qianwen-model-recommendations.md) | Fetch before answering. If CDN access fails, use the corresponding [local fallback](cdn/references/qianwen-model-recommendations.md). State that catalog data is a snapshot when currentness matters. |
+| **Current / exact / account-specific** (availability, price, quota) | **CLI MUST be used** — see `cli-usage.md`          | Snapshots cannot verify current state; never invent numbers |
 | Search by capability ("model that does X")                     | `qianwen models search "<X>" --format json`             | Snapshot keyword coverage is incomplete              |
 | CLI returned an error                                          | `error-handling.md` recovery actions, **then retry**    | Auth failure → run 3-step login, do not skip to snapshot |
-| CLI completely unavailable AND user declines install/login     | `model-list.md`, `pricing.md` (with stale-data caveat)  | Only after CLI recovery genuinely failed             |
+| CLI completely unavailable AND user declines install/login     | CDN model catalogs + `pricing.md`                       | Answer only snapshot-supported facts with a stale-data caveat; do not claim current availability, exact current price, or account quota |
 | All of the above cannot answer AND user confirms online lookup | URLs in `sources.md`                                    | Never proactively fetch                              |
 
 ## Diagnostic Flow (Interactive Advisory)
 
 > **Prerequisite**: Complete [Detecting Key Type](#detecting-key-type) above and narrow the candidate set before
-> proceeding. All recommendations below must stay within the user's billing scope.
+> proceeding. All recommendations loaded from the CDN catalog must stay within the user's billing scope.
 
 Ask the user (in order):
 
@@ -130,25 +138,14 @@ Ask the user (in order):
 
 ## Default Recommendations
 
-No clear signals → use the canonical default for the domain. For specialized cases (reasoning, coding,
-OCR, role-play, image editing, etc.) and per-domain comparison, see
-[recommendation-matrix.md](references/recommendation-matrix.md).
+Before recommending any model, check its exact ID against the [official retirement list](https://alioth.alicdn.com/model/prod/model-offline.json) (`id`, `expiredTime`) and any CLI `lifecycle` result. Exclude scheduled or already retired models from defaults and recommendations, even if a catalog or plan still lists them. If the user explicitly selects one, disclose its retirement date and the [announcement](https://platform.qianwenai.com/docs/changelog/model-deprecation), suggest a supported replacement, and do not silently substitute it. If lifecycle data cannot be verified, say so; a snapshot alone is not proof of current availability.
 
-| Domain              | Default          | Quality          | Speed              | Cost               |
-|---------------------|------------------|------------------|--------------------|--------------------|
-| text.chat           | qwen3.7-plus     | qwen3.8-max      | qwen3.7-flash      | qwen-turbo         |
-| text.chat (balanced)| qwen3.7-plus     | qwen3.7-max      | qwen3.7-flash      | qwen3.7-flash      |
-| vision.analyze      | qwen3.7-plus     | qwen3.8-max      | qwen3.8-flash      | qwen3.8-flash      |
-| omni (voice+vision) | qwen3.5-omni-plus | qwen3.5-omni-plus | qwen3.5-omni-flash | —                  |
-| image.generate      | wan2.7-image     | qwen-image-3.0-pro | wan2.2-t2i-flash   | wan2.2-t2i-flash · z-image-turbo (open-source) |
-| image.edit          | wan2.7-image     | qwen-image-3.0-pro | wan2.5-i2i-preview | wan2.5-i2i-preview |
-| video.t2v           | happyhorse-1.1-t2v | wan2.7-t2v       | happyhorse-1.1-t2v | —                  |
-| video.i2v           | happyhorse-1.1-i2v | wan2.7-i2v       | happyhorse-1.1-i2v | —                  |
-| video.edit          | wan2.7-videoedit | wan2.7-videoedit | happyhorse-1.0-video-edit | —           |
-| audio.tts           | qwen-audio-3.0-tts-plus | qwen-audio-3.0-tts-plus | cosyvoice-v3.5-flash | qwen3-tts-flash |
+Before choosing a default or recommending a model, fetch and read the current CDN recommendations linked above. For a Token Plan key, also read the Token Plan model catalog linked above and restrict candidates to it.
 
-> **Degradation**: If this skill is not loaded, each execution skill falls back to its own built-in
-> default. This protocol is purely additive — it enhances model selection but never blocks execution.
+- If the user explicitly specifies a model, use it after verifying that it is available in the user's billing scope.
+- Otherwise, match the strongest task signal first, then choose the appropriate quality, speed, or cost tier.
+- If missing requirements would materially change the choice, compare the relevant domain options and ask the user to clarify.
+- Preserve the selected model's documented thinking default unless the user or task requires an override; do not enable thinking merely as a generic default for simple tasks.
 
 ## CLI Quick Reference
 
@@ -166,8 +163,8 @@ OCR, role-play, image editing, etc.) and per-domain comparison, see
 > shared-package Credits for the logged-in account. For purchasing shared packages, adjusting
 > seats, or full billing history, direct the user to the
 > [Token Plan Subscription console](https://platform.qianwenai.com/home/billing/subscription/token-plan).
-> Token Plan model availability (text + image + video + TTS) is documented in
-> [recommendation-matrix.md](references/recommendation-matrix.md#token-plan-models).
+> Token Plan model availability (text + image + video + TTS) is documented in the
+> CDN Token Plan model catalog linked above.
 
 | Need                          | Command                                                          |
 |-------------------------------|------------------------------------------------------------------|
@@ -202,8 +199,8 @@ Full classification, signals, and example flows: [error-handling.md](references/
 
 Skip this section for Token Plan.
 
-- **Latest pricing**: Run `qianwen models info <model> --format json` first; use `pricing.md` only as
-  offline fallback. **Never invent a price.**
+- **Latest pricing**: Run `qianwen models info <model> --format json` first; use the CDN pricing reference
+  linked by `pricing.md` only as a fallback. **Never invent a price.**
 - **Mandatory disclaimer**: Every cost-related answer **must** end with the disclaimer in
   [pricing-disclaimer.md](references/pricing-disclaimer.md) (Chinese or English version, matching the
   user's response language). Omitting the disclaimer is a **critical failure**.
@@ -224,10 +221,10 @@ When the user asks to check for updates ("check for updates", "check version", "
 
 ## Anti-Patterns
 
-- **Never fabricate model names** — only recommend models listed in this skill or returned by CLI.
+- **Never fabricate model names** — only recommend models listed in the CDN model catalogs or returned by CLI.
 - **Never infer the API key type from the request wording** — use the configured Key or calling context.
 - **Never recommend a model outside the user's billing scope** — Token Plan keys must only receive
-  models from the [Token Plan list](references/recommendation-matrix.md#token-plan-models); PAYG
+  models from the Token Plan model catalog linked above; PAYG
   keys may use the full catalog. Violating this causes hard failures for the user.
 - **Never invent or guess any price figure** — use CLI / `pricing.md` / official pricing page only.
   Fabricating a price is a **critical failure**.
@@ -238,8 +235,7 @@ When the user asks to check for updates ("check for updates", "check version", "
 - **Never output API keys in plaintext** — see Security section.
 - **Never confuse CLI session with API key** — CLI auth uses browser device-flow login; never offer
   `$DASHSCOPE_API_KEY` or `$QIANWEN_API_KEY` as a fix for CLI `Not authenticated` / `AUTH_REQUIRED` errors.
-- **Never proactively fetch URLs or trigger web searches** — only access online sources when CLI +
-  snapshots cannot answer AND the user confirms.
+- **Never proactively fetch arbitrary URLs or trigger web searches.** Fetch the documented CDN model catalogs when model data is needed; access other online sources only when CLI + CDN catalogs cannot answer AND the user confirms.
 - **Never construct usage/billing/console URLs** — only use the exact links listed in this skill or its
   references. If a URL is not listed, do not invent one.
 - **Always include the cost disclaimer** for any cost-related answer (see
@@ -251,10 +247,10 @@ When the user asks to check for updates ("check for updates", "check version", "
 |--------------------------------------------------------------|------------------------------------------------------------------|
 | [cli-usage.md](references/cli-usage.md)                      | CLI-first strategy, 3-step login, display rules, model detail URL |
 | [error-handling.md](references/error-handling.md)            | CLI error classification & recovery                              |
-| [recommendation-matrix.md](references/recommendation-matrix.md) | Full recommendation tables, Cross-Skill Resolution, Token Plan, Thinking Mode |
+| [qianwen-model-recommendations.md (CDN)](https://alioth.alicdn.com/skills-info/models/references/qianwen-model-recommendations.md) ([local fallback](cdn/references/qianwen-model-recommendations.md)) | Cross-domain recommendations and Token Plan constraints          |
 | [pricing-disclaimer.md](references/pricing-disclaimer.md)    | Pricing guidance + mandatory disclaimer + billing console links  |
-| [pricing.md](references/pricing.md)                          | Pricing structural overview (offline snapshot)                   |
-| [model-list.md](references/model-list.md)                    | Model catalog (offline snapshot)                                 |
+| [pricing.md](references/pricing.md)                          | Stable billing units, cost caveats, and CDN pricing fallback     |
+| [qianwen-model-list.md (CDN)](https://alioth.alicdn.com/skills-info/models/references/qianwen-model-list.md) ([local fallback](cdn/references/qianwen-model-list.md)) | Cross-domain model catalog snapshot                              |
 | [sources.md](references/sources.md)                          | Official documentation URLs                                      |
 | `qianwen models list --format json`                          | Dynamic: full model catalog with pricing, features, quotas       |
 | `qianwen models info <id> --format json`                     | Dynamic: single model details (pricing tiers, context, rate limits) |

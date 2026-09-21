@@ -6,7 +6,7 @@ a cost-related answer, **you must read and apply this file**.
 
 ## Pricing Guidance
 
-- **Default pricing reference**: [pricing.md](pricing.md) — Structural overview only.
+- **Default pricing reference**: [pricing.md](pricing.md) — stable billing guidance with a CDN structural fallback.
 - **Latest / exact prices**: When the user asks for exact or latest pricing, run
   `qianwen models info <model> --format json` first (returns structured pricing tiers).
   Fall back to the [official pricing page](https://platform.qianwenai.com/docs/developer-guides/getting-started/pricing)
@@ -19,7 +19,7 @@ a cost-related answer, **you must read and apply this file**.
 - **Cost tips**:
     - Use Batch API for 50% off in non-realtime scenarios
     - Enable context cache for repeated contexts
-    - Use flash/turbo series for non-critical tasks
+    - Use the lower-cost option recommended by the [CDN model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-model-recommendations.md) for non-critical tasks. If CDN access fails, use the [local fallback](../cdn/references/qianwen-model-recommendations.md).
     - Watch for tiered pricing breakpoints (≤32K, ≤128K, ≤256K, ≤1M)
 
 ## Usage & Billing Console

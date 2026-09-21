@@ -5,6 +5,7 @@
 > - https://platform.qianwenai.com/docs/token-plan/team/token-plan-team-overview.md
 > - https://platform.qianwenai.com/docs/token-plan/best-practices/multimodal-generation.md
 > - https://platform.qianwenai.com/home/billing/subscription/token-plan
+> - [CDN Token Plan model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-token-plan-models.md) — Personal and Team model lists, modality constraints, and exclusions. If CDN access fails, use the [local fallback](../cdn/references/qianwen-token-plan-models.md).
 > Updated: 2026-08-14
 
 > [!CAUTION]
@@ -20,12 +21,12 @@ QianWen exposes two mutually exclusive authentication systems. Mixing them produ
 |-----------|------------------------------|------------|
 | Key format | `sk-ws-xxxxx` (legacy `sk-xxxxx`) | `sk-sp-xxxxx` |
 | Auth header | `Authorization: Bearer <key>` | `Authorization: Bearer <key>` (NOT `x-api-key`) |
-| Supported text models | Full catalog (100+) | **9 text LLMs** (Personal) / **18 text LLMs** (Team) (see below) |
-| Supported image models | Full catalog | **3 image models** (Personal) / **5** (Team), tool-integrated only (see below) |
-| Supported video models | Full catalog | **3 video models**, tool-integrated only (see below) |
-| Supported TTS models | Full catalog | **1 TTS model**, tool-integrated only (see below) |
-| ASR | Available | **1 model in catalog** — not callable from any Skill in this repo (see below) |
-| Embedding / Rerank / Translation | Available | **Not supported** |
+| Supported text models | Full catalog | Catalog-defined |
+| Supported image models | Full catalog | Catalog-defined |
+| Supported video models | Full catalog | Catalog-defined |
+| Supported TTS models | Full catalog | Catalog-defined |
+| ASR | Available | Catalog-defined; check availability and Skill support |
+| Embedding / Rerank / Translation | Available | Catalog-defined |
 | Usage scope | API calls from scripts, apps, and tools | Interactive AI tools and their Skill/Agent extensions |
 | Billing | Per-token consumption (CNY) | **Credits**: monthly seat allowance + shared usage packages |
 | Quota exhaustion | Continues (pay more or use prepaid balance) | **Hard fail — service paused** until next cycle or shared package purchased |
@@ -60,71 +61,14 @@ Token Plan keys are intended exclusively for interactive AI coding / chat tools 
 Code, Qwen Code, OpenClaw, OpenCode, Codex, Kilo Code/CLI, Hermes Agent) and the Skill/Agent
 extensions they invoke for the current user. Any other usage constitutes a **policy violation**.
 
-Before each Token Plan request, select the exact modality and mode, then choose and explicitly pass
-a model from the current list below. If this snapshot is stale or insufficient, read the official
-Markdown sources above. Do not probe models, change modes, or automatically fall back to PAYG.
+Before each Token Plan request, select the exact modality and mode, then fetch and read the current
+CDN Token Plan model catalog linked above.
+Choose and explicitly pass an exact listed model. Do not probe models, change modes, or automatically
+fall back to PAYG.
 
 ## Supported Models
 
-### Text Models (Personal: 9 / Team: 18)
-
-**Personal version** (9 models):
-
-| Model                    | Context Window | Notes                                                    |
-|--------------------------|---------------:|----------------------------------------------------------|
-| `qwen3.8-max`            |             1M | Strongest flagship. Multimodal. Thinking mode.           |
-| `qwen3.8-flash`          |             1M | Multimodal. Fast. Thinking mode.                         |
-| `qwen3.7-max`            |             1M | Text-only. Strongest agentic coding, long-horizon.       |
-| `qwen3.7-plus`           |             1M | Multimodal vision-language. Coding, tools, productivity. |
-| `qwen3.6-flash`          |             1M | Multimodal. Fast. Vision understanding.                  |
-| `glm-5.2`               |             1M | Third party (Zhipu). Long-horizon tasks.                 |
-| `deepseek-v4-pro`        |             1M | Third party (DeepSeek). Thinking mode.                   |
-| `deepseek-v4-pro-0813`   |             1M | Third party (DeepSeek). Latest v4-pro snapshot.          |
-| `deepseek-v4-flash-0731` |             1M | Third party (DeepSeek). Lightweight MoE. Not Responses API. |
-
-**Team version** (additional 9 models, 18 total):
-
-| Model             | Context Window | Notes                                       |
-|-------------------|---------------:|---------------------------------------------|
-| `qwen3.6-plus`    |             1M | Multimodal text + image + video.            |
-| `deepseek-v4-flash` |           1M | Third party (DeepSeek).                     |
-| `deepseek-v3.2`   |           128K | Third party (DeepSeek).                     |
-| `kimi-k2.7-code`  |           256K | Third party (Moonshot). Coding specialist.  |
-| `kimi-k2.6`       |           256K | Third party (Moonshot).                     |
-| `kimi-k2.5`       |           256K | Third party (Moonshot).                     |
-| `glm-5.1`         |           198K | Third party (Zhipu).                        |
-| `glm-5`           |           198K | Third party (Zhipu).                        |
-| `MiniMax-M2.5`    |           204K | Third party (MiniMax).                      |
-
-### Image Generation Models (Personal: 3 / Team: 5)
-
-| Model                | Notes                                                              |
-|----------------------|--------------------------------------------------------------------|
-| `qwen-image-3.0-pro` | Latest flagship image model; high quality, strong text rendering    |
-| `qwen-image-2.0`     | Default; general-purpose; strong Chinese text rendering (Team only) |
-| `qwen-image-2.0-pro` | Higher quality, slightly slower (Team only)                        |
-| `wan2.7-image`       | Multi-style; returns 4 images by default                           |
-| `wan2.7-image-pro`   | Supports 4K (additional sizes: 2048×2048, 1440×2560, 2560×1440)    |
-
-### Video Generation Models (3 total)
-
-| Model                | Notes                                                              |
-|----------------------|--------------------------------------------------------------------|
-| `happyhorse-1.1-t2v` | Text-to-video. 720P/1080P, 3–15s, with audio.                      |
-| `happyhorse-1.1-i2v` | Image-to-video. 720P/1080P, 3–15s, with audio.                     |
-| `happyhorse-1.1-r2v` | Reference-to-video. Multi-ref, 720P/1080P, 3–15s, with audio.      |
-
-### Audio Models (TTS: 1 implemented; realtime & ASR reserved)
-
-| Model                          | Type     | Notes                                                  |
-|--------------------------------|----------|--------------------------------------------------------|
-| `qwen-audio-3.0-tts-plus`      | TTS      | Highest quality TTS. Multi-language + Chinese dialects. Billed per character (not per token). |
-| `qwen-audio-3.0-realtime-plus` | Realtime | In the Token Plan catalog; realtime, not implemented by any Skill. |
-| `qwen-audio-3.0-asr-flash`     | ASR      | In the Token Plan catalog; not callable from any Skill in this repo. |
-
-Image generation, video generation, and TTS models are **not reachable from the standard text API**;
-they are integrated into interactive AI tools through each tool’s Skill / Slash Command / Agent
-mechanism.
+Fetch and read the CDN Token Plan model catalog linked above for Personal and Team model lists, modality constraints, and exclusions.
 
 ## Credits Billing Mechanism
 
@@ -147,7 +91,7 @@ the Agent is responsible for selecting and explicitly passing a documented model
 | qianwen-vision              |                  Yes                | Requires a listed model that supports the vision task       |
 | qianwen-image-generation    |                  Yes                | Uses a documented Token Plan image model                    |
 | qianwen-video-generation    |                  Yes                | Uses a documented Token Plan video model                    |
-| qianwen-audio-tts           |                  Yes                | Default model `qwen-audio-3.0-tts-plus` is TP-compatible; CosyVoice (`tts_cosyvoice.py`) remains PAYG-only |
+| qianwen-audio-tts           |                  Yes                | Read the CDN model catalog linked above for current default compatibility; CosyVoice (`tts_cosyvoice.py`) remains PAYG-only |
 
 PAYG defaults remain unchanged. Token Plan calls must not silently use those defaults or fall back
 to PAYG.
@@ -158,7 +102,7 @@ to PAYG.
 |--------------------------------------------------|------------------------------------------------------------------------------------|-------------------------------------------------------------------------------|
 | `InvalidApiKey: No API-key provided`             | Key not configured, or tool used `x-api-key` header                                | Set key; switch to `Authorization: Bearer`                                    |
 | `InvalidApiKey: Invalid API-key provided`        | Standard `sk-` key mismatched, subscription expired, key copied with whitespace    | Verify subscription status; reset key in console                              |
-| `model 'xxx' not found or not supported`         | Model name typo / wrong case; model not in Token Plan catalog                      | Match model ID exactly; review supported list above                           |
+| `model 'xxx' not found or not supported`         | Model name typo / wrong case; model not in Token Plan catalog                      | Match the model ID exactly; review the CDN catalog linked above               |
 | `Range of input length should be [1, xxx]`       | Input + history exceeds context window                                             | Start a new session, compact context, or switch to a larger-context model     |
 | `API rate limit reached`                         | Seat / shared-package Credits exhausted, or shared quota rate-limited              | Check Token Plan console for usage                                            |
 

@@ -1,12 +1,12 @@
 # CLI Error Handling — qianwen-model-selector
 
-When a CLI command fails, **do not silently fall back to static snapshots**. Classify the error first,
+When a CLI command fails, **do not silently fall back to CDN/static snapshots**. Classify the error first,
 then apply the matching recovery action. Only fall back after recovery genuinely fails or the user
 explicitly declines.
 
 ## Core principle
 
-> **Recover first, fall back last.** Snapshots and web lookups are tertiary sources — they exist for
+> **Recover first, fall back last.** CDN/static snapshots and other web lookups are tertiary sources — they exist for
 > the case when CLI is truly unreachable, not for the case when CLI returned a recoverable error.
 
 ## Error classification & recovery
@@ -19,7 +19,7 @@ explicitly declines.
 | `network-timeout` | Network errors, `ETIMEDOUT`, `ECONNREFUSED`, `socket hang up`, `502/503/504` | Retry once after 2s. If second attempt also fails, inform user and ask whether to retry again or fall back to snapshot. |
 | `rate-limit` | `429`, `rate limit exceeded`, `too many requests` | Inform user; direct them to [Rate Limit Console](https://platform.qianwenai.com/home/settings/monitoring/rate-limit). **Do NOT** auto-fall back — let user decide whether to wait and retry. |
 | `quota-exhausted` | `quota exhausted`, `insufficient balance`, `free tier used up`, `403` on usage | Inform user; direct them to [Billing Console](https://platform.qianwenai.com/home/billing/pay-as-you-go). **Do NOT** fall back to snapshots — snapshots have no quota information, falling back would be misleading. |
-| `permission-denied` | `403 Forbidden` on model/feature, `not subscribed`, Token Plan key (`sk-sp-...`) requesting a model outside its catalog | Read [tokenplan.md](../../../ops/qianwen-ops-auth/references/tokenplan.md) or its official sources. Explain the restriction and select only a documented model; never probe alternatives or automatically fall back to PAYG. |
+| `permission-denied` | `403 Forbidden` on model/feature, `not subscribed`, Token Plan key (`sk-sp-...`) requesting a model outside its catalog | Fetch the [CDN Token Plan model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-token-plan-models.md). Explain the restriction and select only a documented model; never probe alternatives or automatically fall back to PAYG. If CDN access fails, use the [local fallback](../cdn/references/qianwen-token-plan-models.md). |
 | `version-mismatch` | `unsupported flag`, `unknown subcommand`, `please upgrade` | Suggest `qianwen version --check` or run the update-check skill. After upgrade, retry original command. |
 | `other` | Unrecognized stderr output | Show the raw stderr to the user; link to [official docs](https://platform.qianwenai.com/docs/). Only after the user has seen the error and declined to debug, fall back to snapshot. |
 
@@ -43,7 +43,7 @@ For any CLI error, follow this template:
 3. **Act** — perform the recovery action for that category.
 4. **Retry** — re-run the **exact original command** after recovery succeeds.
 5. **Fall back only if** — recovery failed OR user explicitly opted out.
-6. **When falling back** — always state explicitly: "CLI unavailable, using offline snapshot (may be outdated)."
+6. **When falling back** — always state explicitly: "CLI unavailable, using the CDN/static snapshot (may be outdated)."
 
 ## Example flows
 
@@ -111,5 +111,5 @@ Agent: [classify: not-installed]
        "QianWen CLI is not installed. Install with:
         npm install -g @qianwenai/qianwen-cli
         After install, I'll retry your query. Want me to wait, or use the
-        offline snapshot now (may be outdated)?"
+        CDN snapshot now (may be outdated)?"
 ```

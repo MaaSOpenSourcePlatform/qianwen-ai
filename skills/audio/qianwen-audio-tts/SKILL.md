@@ -44,94 +44,35 @@ print(detect_api_key_type('scripts/qianwen_lib.py'))
 
 | Output | Meaning |
 |--------|---------|
-| `token-plan` | Token Plan key — use only models from the Token Plan list below. |
+| `token-plan` | Token Plan key — use only models from the Token Plan catalog below. |
 | `payg` | Pay-as-you-go key — full model catalog available. |
 | `not-set` | No key configured. |
 
-For Token Plan, use an exact model from qianwen-model-selector with `scripts/tts.py`, or
-consult `qianwen-ops-auth/references/tokenplan.md`. If unavailable, use:
-- Personal: https://platform.qianwenai.com/docs/token-plan/personal/token-plan-personal-overview.md
-- Team: https://platform.qianwenai.com/docs/token-plan/team/token-plan-team-overview.md
+For Token Plan, fetch and read the current [Token Plan model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-token-plan-models.md), then use an exact listed model with `scripts/tts.py`. If CDN access fails, use the [local fallback](cdn/references/qianwen-token-plan-models.md).
 
 ### Pre-Execution: Key-Based Model Decision
 
-Before calling any TTS script, determine the key type by its prefix (non-plaintext check via
-`scripts/qianwen_lib.py`). Then select model and script accordingly:
-
-| Key Prefix | Type | Script | Model | Notes |
-|------------|------|--------|-------|-------|
-| `sk-sp-...` | Token Plan | `scripts/tts.py` | Default `qwen-audio-3.0-tts-plus` | Default model is TP-compatible; voice `longanlingxin` applies automatically |
-| `sk-ws-...` / `sk-...` | PAYG | `scripts/tts.py` | Default `qwen-audio-3.0-tts-plus` (NRT) | High-quality, voice `longanlingxin`, output mp3 |
-| `sk-ws-...` / `sk-...` | PAYG | `scripts/tts.py` | `--model qwen-audio-3.0-tts-flash` | Lower-cost alternative (PAYG-only), voice `longanhuan_v3.6` |
-| `sk-ws-...` / `sk-...` | PAYG | `scripts/tts.py` | `qwen3-tts-*` / `qwen-audio-3.0-tts-*` | Full model range available |
-| `sk-ws-...` / `sk-...` | PAYG | `scripts/tts_cosyvoice.py` | `cosyvoice-*` | Requires `dashscope` SDK |
-
-The `scripts/tts_cosyvoice.py` script supports PAYG keys only and rejects Token Plan (`sk-sp-...`)
-keys.
+Before calling a TTS script, determine the key type by its prefix (non-plaintext check via
+`scripts/qianwen_lib.py`), then fetch and read the current [Qwen audio TTS model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-audio-tts-models.md) for script compatibility, recommendations, and defaults. If CDN access fails, use the [local fallback](cdn/references/qianwen-audio-tts-models.md).
 
 Token Plan supports only specific models — use exactly a model from the references above; do not
 guess or probe model availability. For PAYG, continue below.
 
 ## Model Selection
 
-### Qwen TTS (HTTP API) — use `scripts/tts.py`
+Before selecting, recommending, or defaulting a model, use the Qwen audio TTS model catalog linked above. It contains the model list, basic model information, script and voice compatibility, recommendations, and defaults.
 
-| Model | Use Case | Notes |
-|-------|----------|-------|
-| `qwen3-tts-flash` | Fast, multi-language | Cost-effective; specify `--model qwen3-tts-flash` explicitly |
-| `qwen3-tts-instruct-flash` | Instruction-guided style control | Tone/emotion via instructions |
-
-### Qwen-Audio-TTS (HTTP NRT API) — use `scripts/tts.py`
-
-| Model | Use Case | Notes |
-|-------|----------|-------|
-| `qwen-audio-3.0-tts-plus` | **Default** — high-quality professional scenarios | TP + PAYG; instruction control, voice cloning, voice `longanlingxin` |
-| `qwen-audio-3.0-tts-flash` | Low-latency real-time interaction | PAYG-only; NRT endpoint, voice `longanhuan_v3.6`; specify `--model` explicitly |
-
-### CosyVoice (WebSocket / HTTP NRT API) — use `scripts/tts_cosyvoice.py`
-
-| Model | Use Case | Voice Support | Notes |
-|-------|----------|---------------|-------|
-| `cosyvoice-v3-flash` | High quality, fast | Supports system voices (80+ built-in) | **Default** |
-| `cosyvoice-v3-plus` | Highest quality | Supports system voices (80+ built-in) | — |
-| `cosyvoice-v3.5-flash` | High-performance, instruction control, 11 langs | Custom voices only (requires Voice Cloning or Voice Design) | See pricing references |
-| `cosyvoice-v3.5-plus` | Ultra-expressive, instruction control, 11 langs | Custom voices only (requires Voice Cloning or Voice Design) | See pricing references |
-
-> **Note**: CosyVoice requires `dashscope` SDK. See [cosyvoice-guide.md](references/cosyvoice-guide.md). Qwen-Audio-TTS uses `tts.py` (stdlib only, no SDK needed).
-
-1. **User specified a model** → use the appropriate script:
-   - `qwen3-tts-*` / `qwen-audio-3.0-tts-*` → `scripts/tts.py`
-   - `cosyvoice-*` → `scripts/tts_cosyvoice.py`
-2. **Consult the qianwen-model-selector skill** when model choice depends on capability, scenario, or pricing.
-3. **No signal, clear task** → `qwen-audio-3.0-tts-plus` via `tts.py` (default; NRT endpoint, voice `longanlingxin`, output mp3).
-
-> **⚠️ Important**: The model list above is a **point-in-time snapshot** and may be outdated. Model availability
+> **⚠️ Important**: The model catalog is a **point-in-time snapshot** and may be outdated. Model availability
 > changes frequently. **Always check the [official model list](https://www.qianwenai.com/models)
 > for the authoritative, up-to-date catalog before making model decisions.**
 
-> **Model details**: For more information about a specific model, direct the user to its detail page: `https://www.qianwenai.com/models/<model-name>` (replace `<model-name>` with the exact model ID, e.g. `qwen3-tts-flash` → https://www.qianwenai.com/models/qwen3-tts-flash). NEVER modify or guess the model name in the URL.
+> **Model details**: For more information about a specific model, direct the user to `https://www.qianwenai.com/models/<model-name>`. Replace `<model-name>` with the exact model ID; never modify or guess it.
 
 > **Dynamic model queries**: If the **qianwen-model-selector** skill or **QianWen CLI** (`qianwen models info <model>`) is available, use it for real-time model data. CLI requires authentication — see the **qianwen-usage** skill for login flow.
 
 ## Available Voices
 
-| Voice | Description | Script | Available for |
-|-------|-------------|--------|---------------|
-| Cherry, Ethan, Serena | Qwen TTS system voices | `tts.py` | qwen3-tts-* |
-| longanyang, longanhuan, longhuhu_v3 | CosyVoice system voices | `tts_cosyvoice.py` | cosyvoice-v3-flash, cosyvoice-v3-plus only |
-| longanlingxin, longanlufeng | Qwen-Audio-TTS Plus system voices | `tts.py` | qwen-audio-3.0-tts-plus |
-| longanhuan_v3.6, longjielidou_v3.6, loongeva_v3.6, loongjohn | Qwen-Audio-TTS Flash system voices | `tts.py` | qwen-audio-3.0-tts-flash |
-
-> **Full lists**: [api-guide.md](references/api-guide.md#system-voice-list) (Qwen TTS) · [cosyvoice-guide.md](references/cosyvoice-guide.md) (CosyVoice) · [Qwen-Audio-TTS voice list](https://platform.qianwenai.com/docs/api-reference/speech-synthesis/qwen-audio-tts/voice-list)
-
-> **⚠️ Qwen-Audio-TTS voice compatibility**: Voices are **NOT interchangeable** across `qwen-audio-3.0-tts-plus` and `qwen-audio-3.0-tts-flash`. Each model has its own voice set:
-> - `qwen-audio-3.0-tts-plus` default: `longanlingxin`
-> - `qwen-audio-3.0-tts-flash` default: `longanhuan_v3.6`
->
-> If you need a non-default voice, specify `--voice <id>` and consult the official voice list:
-> [NRT HTTP API](https://platform.qianwenai.com/docs/api-reference/speech-synthesis/cosyvoice-nrt/http-api.md) · [Qwen-Audio-TTS voices](https://platform.qianwenai.com/docs/api-reference/speech-synthesis/qwen-audio-tts/voice-list.md)
-
-> **⚠️ v3.5 models**: `cosyvoice-v3.5-flash` and `cosyvoice-v3.5-plus` do **NOT** support any system voices listed above. You must create a custom voice via Voice Cloning or Voice Design.
+Use the Qwen audio TTS model catalog linked above for current model-to-voice compatibility and defaults. For complete voice inventories, use the official voice-list links in [sources.md](references/sources.md).
 
 ### Custom Voices (Required for v3.5)
 
@@ -174,7 +115,7 @@ If `python3` is not found, try `python --version` or `py -3 --version`. If Pytho
 
 ```bash
 python3 <this-skill-dir>/scripts/tts.py \
-  --request '{"text":"Hello, this is a test.","voice":"Cherry"}' \
+  --request '{"text":"Hello, this is a test.","voice":"longanlingxin"}' \
   --output output/qianwen-audio-tts/ \
   --print-response
 ```
@@ -239,9 +180,9 @@ python3 <this-skill-dir>/scripts/tts_cosyvoice.py --text "Hello"
 |-------|------|-------------|
 | `text` | string | **Required** — text to synthesize (max 600 chars) |
 | `voice` | string | **Required** — voice ID (e.g. `Cherry`, `Ethan`) |
-| `model` | string | Model ID (default: `qwen-audio-3.0-tts-plus`) |
+| `model` | string | Model ID; check the model catalog above for the current default |
 | `language_type` | string | `Auto`, `Chinese`, `English`, `Japanese`, `Korean`, `French`, `German`, etc. |
-| `instructions` | string | Tone/style instructions — `qwen3-tts-instruct-flash` only, max 1,600 tokens, Chinese & English only |
+| `instructions` | string | Tone/style instructions; check the model catalog above for current model compatibility and limits |
 | `optimize_instructions` | bool | When true, the system semantically enhances `instructions` for better naturalness. Requires `instructions` to be set. Default: false |
 | `stream` | bool | Enable streaming (Base64 chunks) |
 
@@ -251,8 +192,8 @@ python3 <this-skill-dir>/scripts/tts_cosyvoice.py --text "Hello"
 |-------|------|-------------|
 | `text` | string | **Required** — text to synthesize (max 20,000 chars per call) |
 | `voice` | string | **Required** — voice ID (model-specific, see voice lists) |
-| `model` | string | Model ID (default: `cosyvoice-v3-flash`) |
-| `instruction` | string | Free-style instruction for speech control — supported by `cosyvoice-v3.5-plus`, `cosyvoice-v3.5-flash`, `cosyvoice-v3-flash` |
+| `model` | string | Model ID; check the model catalog above for the current default |
+| `instruction` | string | Free-style instruction for speech control; check the model catalog above for current model compatibility |
 | `language_hints` | list | Target language hint: `zh`, `en`, `fr`, `de`, `ja`, `ko`, `ru`, `pt`, `th`, `id`, `vi`, etc. |
 | `format` | string | Audio format: `mp3` (default), `wav`, `pcm`, `opus` |
 | `sample_rate` | int | Sample rate (Hz): 8000, 16000, 22050 (default), 24000, 44100, 48000 |
@@ -269,8 +210,7 @@ python3 <this-skill-dir>/scripts/tts_cosyvoice.py --text "Hello"
 ## Important Notes
 
 - **text**: Max 600 characters per request (Qwen3-TTS). Max 20,000 characters (CosyVoice/Qwen-Audio-TTS NRT).
-- **instructions** (Qwen3-TTS): Only works with `qwen3-tts-instruct-flash`. Max 1,600 tokens. Chinese & English only.
-- **instruction** (CosyVoice): Supported by `cosyvoice-v3.5-plus`, `cosyvoice-v3.5-flash`, `cosyvoice-v3-flash`. (Qwen-Audio-TTS also supports `instruction` via `tts.py`.) Use natural language to control dialect, emotion, pace, or character.
+- **instructions / instruction model compatibility**: Check the model catalog above, then use the parameter form documented for the selected model.
 - **language_type** (Qwen3-TTS): `Auto` for mixed language; specify for better pronunciation.
 - **language_hints** (CosyVoice/Qwen-Audio-TTS): Specify target language code (`zh`, `en`, etc.) for improved synthesis quality.
 - **audio_url**: Valid for 24 hours — download promptly.

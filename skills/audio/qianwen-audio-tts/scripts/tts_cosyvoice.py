@@ -49,6 +49,7 @@ from qianwen_lib import (  # noqa: E402
     build_source_config,
     download_file,
     is_token_plan_key,
+    load_cdn_model_config,
     native_base_url,
     require_api_key,
     run_update_signal,
@@ -59,7 +60,6 @@ from qianwen_lib import (  # noqa: E402
 # ---------------------------------------------------------------------------
 
 SKILL_USER_AGENT = "qianwenai-skill"
-DEFAULT_MODEL = "cosyvoice-v3-flash"
 DEFAULT_VOICE = "longanyang"
 
 # Native endpoint paths appended to the shared native base URL (see qianwen_lib).
@@ -94,26 +94,29 @@ VOICES = {
 # System voices (built-in) — only supported by v3 models
 SYSTEM_VOICES = set(VOICES.keys())
 
-# Models that require custom voice IDs (no system voice support)
-CUSTOM_VOICE_ONLY_MODELS = {
-    "cosyvoice-v3.5-flash",
-    "cosyvoice-v3.5-plus",
-}
 
-# Models that support the HTTP NRT API
-NRT_MODELS = {
-    "cosyvoice-v3.5-flash",
-    "cosyvoice-v3.5-plus",
-    "cosyvoice-v3-flash",
-    "cosyvoice-v3-plus",
-}
+def _model_config() -> dict[str, Any]:
+    config = load_cdn_model_config(
+        "qianwen-audio-tts-config.json",
+        required_keys=("cosyvoice",),
+    )["cosyvoice"]
+    if not isinstance(config, dict):
+        raise RuntimeError("Invalid audio model configuration: cosyvoice must be an object")
+    return config
 
-# Models that support the instruction parameter
-INSTRUCTION_MODELS = {
-    "cosyvoice-v3.5-flash",
-    "cosyvoice-v3.5-plus",
-    "cosyvoice-v3-flash",
-}
+
+def _default_model() -> str:
+    model = _model_config().get("default_model")
+    if not isinstance(model, str) or not model:
+        raise RuntimeError("Invalid audio model configuration: default_model must be a string")
+    return model
+
+
+def _model_ids(key: str) -> set[str]:
+    values = _model_config().get(key)
+    if not isinstance(values, list) or not all(isinstance(item, str) for item in values):
+        raise RuntimeError(f"Invalid audio model configuration: {key} must be a string array")
+    return set(values)
 
 
 def _build_headers(
@@ -271,7 +274,7 @@ examples:
     )
     parser.add_argument("--text", "-t", required=True, help="Text to synthesize")
     parser.add_argument("--model", "-m", default=None,
-                        help=f"Model (PAYG default: {DEFAULT_MODEL}; Token Plan not supported \u2014 use tts.py)")
+                        help="Model (PAYG default loaded from CDN; Token Plan not supported \u2014 use tts.py)")
     parser.add_argument("--voice", "-v", default=None,
                         help=f"Voice (PAYG default: {DEFAULT_VOICE}; key-specific default when omitted)")
     parser.add_argument("--output", "-o", type=Path, default=Path("output/qianwen-audio-tts/cosyvoice.mp3"), help="Output file (default: output/qianwen-audio-tts/cosyvoice.mp3)")
@@ -294,11 +297,14 @@ examples:
         sys.exit(1)
 
     # Model priority: CLI > PAYG default
-    model = args.model or DEFAULT_MODEL
+    model = args.model or _default_model()
     voice = args.voice or DEFAULT_VOICE
+    custom_voice_only_models = _model_ids("custom_voice_only_models")
+    instruction_models = _model_ids("instruction_models")
+    nrt_models = _model_ids("nrt_models")
 
     # Validate: v3.5 models do not support system voices
-    if model in CUSTOM_VOICE_ONLY_MODELS and voice in SYSTEM_VOICES:
+    if model in custom_voice_only_models and voice in SYSTEM_VOICES:
         print(
             f'ERROR: Model "{model}" does not support system voices.\n'
             "You must provide a custom voice ID created via Voice Cloning or Voice Design.\n"
@@ -314,13 +320,13 @@ examples:
     dashscope.base_websocket_api_url = websocket_url
 
     # Validate instruction parameter
-    if args.instruction and model not in INSTRUCTION_MODELS:
+    if args.instruction and model not in instruction_models:
         print(f"Warning: --instruction is not supported by model '{model}'. "
-              f"Supported models: {', '.join(sorted(INSTRUCTION_MODELS))}",
+              f"Supported models: {', '.join(sorted(instruction_models))}",
               file=sys.stderr)
 
     # Choose API path: HTTP NRT for supported models, WebSocket for others
-    if model in NRT_MODELS:
+    if model in nrt_models:
         # Use the public HTTP NRT API so the Skill User-Agent is preserved.
         print(f"Synthesizing (HTTP NRT): model={model}, voice={voice}", file=sys.stderr)
         try:
@@ -333,7 +339,7 @@ examples:
                 sample_rate=args.sample_rate,
                 instruction=(
                     args.instruction
-                    if args.instruction and model in INSTRUCTION_MODELS
+                    if args.instruction and model in instruction_models
                     else None
                 ),
                 language_hints=(

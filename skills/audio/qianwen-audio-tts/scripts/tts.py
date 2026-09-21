@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from qianwen_lib import (  # noqa: E402
     download_file,
     http_request,
+    load_cdn_model_config,
     load_request,
     native_base_url,
     require_api_key,
@@ -38,20 +39,41 @@ from qianwen_lib import (  # noqa: E402
 TTS_GENERATION_PATH = "/services/aigc/multimodal-generation/generation"
 # NRT endpoint path (Qwen-Audio-TTS models: qwen-audio-3.0-tts-plus/flash)
 NRT_TTS_PATH = "/services/audio/tts/SpeechSynthesizer"
-DEFAULT_MODEL = "qwen-audio-3.0-tts-plus"
 DEFAULT_VOICE = "Cherry"
 
-# Default voice per Qwen-Audio-TTS model (voices are NOT interchangeable across models)
-NRT_DEFAULT_VOICES: dict[str, str] = {
-    "qwen-audio-3.0-tts-plus": "longanlingxin",
-    "qwen-audio-3.0-tts-flash": "longanhuan_v3.6",
-}
 NRT_FALLBACK_VOICE = "longanlingxin"
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _model_config() -> dict[str, Any]:
+    config = load_cdn_model_config(
+        "qianwen-audio-tts-config.json",
+        required_keys=("tts",),
+    )["tts"]
+    if not isinstance(config, dict):
+        raise RuntimeError("Invalid audio model configuration: tts must be an object")
+    return config
+
+
+def _default_model() -> str:
+    model = _model_config().get("default_model")
+    if not isinstance(model, str) or not model:
+        raise RuntimeError("Invalid audio model configuration: default_model must be a string")
+    return model
+
+
+def _nrt_default_voices() -> dict[str, str]:
+    voices = _model_config().get("nrt_default_voices")
+    if not isinstance(voices, dict) or not all(
+        isinstance(model, str) and isinstance(voice, str)
+        for model, voice in voices.items()
+    ):
+        raise RuntimeError("Invalid audio model configuration: nrt_default_voices must be an object")
+    return voices
+
 
 def _guess_audio_ext(url: str, default: str = ".wav") -> str:
     """Extract audio extension from URL path, ignoring query params."""
@@ -135,7 +157,7 @@ examples:
     parser.add_argument("--print-response", action="store_true",
                         help="Print audio URL and file path JSON to stdout")
     parser.add_argument("--model", type=str, default=None,
-                        help=f"Model ID (default: {DEFAULT_MODEL}). See epilog for model list")
+                        help="Model ID (default loaded from CDN; see epilog for model examples)")
     parser.add_argument("--voice", type=str, default=None,
                         help=f"Voice ID (default: {DEFAULT_VOICE} for qwen3-tts-*)")
     parser.add_argument("--format", default="mp3", choices=["mp3", "wav", "pcm"],
@@ -159,7 +181,7 @@ examples:
     if args.model:
         request["model"] = args.model
     elif "model" not in request or not request.get("model"):
-        request["model"] = DEFAULT_MODEL
+        request["model"] = _default_model()
     model = request["model"]
 
     api_key = require_api_key(script_file=__file__, domain="TTS")
@@ -178,7 +200,7 @@ examples:
         url = f"{native_base_url()}{TTS_GENERATION_PATH}"
     else:
         # Qwen-Audio-TTS series: NRT endpoint
-        voice = request.get("voice") or args.voice or NRT_DEFAULT_VOICES.get(model, NRT_FALLBACK_VOICE)
+        voice = request.get("voice") or args.voice or _nrt_default_voices().get(model, NRT_FALLBACK_VOICE)
         input_obj = {
             "text": text,
             "voice": voice,

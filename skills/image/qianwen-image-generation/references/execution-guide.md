@@ -15,7 +15,9 @@ After fixing, retry the script (Path 1). If the environment is unfixable, fall t
 
 ## Path 2 · Direct API Call (curl)
 
-### Sync mode (wan2.6, recommended)
+### Sync mode
+
+Fetch the [CDN model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-image-generation-models.md) before choosing a model; the example below demonstrates the synchronous request path. If CDN access fails, use the [local fallback](../cdn/references/qianwen-image-generation-models.md).
 
 **Step 1 — Generate image:**
 

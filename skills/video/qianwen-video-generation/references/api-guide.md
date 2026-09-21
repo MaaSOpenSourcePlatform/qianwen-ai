@@ -12,15 +12,7 @@ Video generation service based on the Wan model family and HappyHorse. Supports 
 
 ## Use Cases
 
-| Scenario | Recommended Mode + Model | Notes |
-|----------|------------------------|-------|
-| Generate video from text description | t2v + `happyhorse-1.1-t2v` | Audio output, TP+PAYG, 3–15s, 720P/1080P. For multi-shot use `--model wan2.6-t2v`. |
-| Animate a still image | i2v + `happyhorse-1.1-i2v` | Audio output, TP+PAYG, 3–15s. Uses `media=[{type:'first_frame',url}]`. |
-| Transition animation between two images | kf2v + `wan2.2-kf2v-flash` | First+last frame control, 5s, silent. |
-| Maintain character consistency across scenes | r2v + `happyhorse-1.1-r2v` | TP+PAYG, up to 9 refs. `wan2.6-r2v` for multi-shot quality. |
-| Style transfer / local editing / extension | vace + `wanx2.1-vace-plus` | Repainting, mask editing, extension, outpainting. |
-| Cinematic multi-shot narrative | t2v/i2v + `shot_type: "multi"` | Multiple camera angles and scenes in a single generation. |
-| Custom background music | t2v/i2v + `audio_url` | Provide an audio file for synchronized generation. |
+Fetch and read the current [Qwen video-generation model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-video-generation-models.md) for mode recommendations, defaults, and basic model information. If CDN access fails, use the [local fallback](../cdn/references/qianwen-video-generation-models.md).
 
 ---
 
@@ -144,16 +136,7 @@ A: `image_reference` = generate video from reference images. `video_repainting` 
 
 ## HappyHorse 1.1 vs 1.0 Differences
 
-HappyHorse 1.1 series (`happyhorse-1.1-t2v`, `happyhorse-1.1-i2v`, `happyhorse-1.1-r2v`) use the same API structure as their 1.0 counterparts with key improvements:
-
-| Aspect | HappyHorse 1.0 | HappyHorse 1.1 |
-|--------|----------------|----------------|
-| Duration | 3–15s | 3–15s (same) |
-| Audio | **With audio** (auto-generated) | **With audio** (auto-generated) |
-| Resolution | 720P/1080P | 720P/1080P |
-| Payload | Same as 1.1 | Same as 1.0 |
-
-The request structure is **identical** — only the `model` field changes. Existing payloads for `happyhorse-1.0-*` work with `happyhorse-1.1-*` by changing the model ID.
+Fetch and read the CDN model catalog linked above for the current HappyHorse versions, capabilities, defaults, and compatibility. The request below remains an API example.
 
 ```bash
 # HappyHorse 1.1 T2V (with audio)

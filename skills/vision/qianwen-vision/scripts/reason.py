@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from vision_lib import (  # noqa: E402
     chat_url,
+    get_default_model,
     load_request,
     prompt_update_check_install,
     require_api_key,
@@ -33,7 +34,6 @@ from vision_lib import (  # noqa: E402
     validate_token_plan_model,
 )
 
-DEFAULT_MODEL = "qvq-max"
 DEFAULT_MAX_TOKENS = 8192
 
 def reason(req: dict[str, Any], api_key: str, *, upload_files: bool = False) -> dict[str, Any]:
@@ -41,7 +41,7 @@ def reason(req: dict[str, Any], api_key: str, *, upload_files: bool = False) -> 
     if not prompt:
         raise ValueError("prompt is required")
 
-    model = req.get("model", DEFAULT_MODEL)
+    model = req["model"] if "model" in req else get_default_model("reason")
     upload_key = api_key if upload_files else None
     upload_model = model if upload_files else None
 
@@ -112,6 +112,11 @@ def reason(req: dict[str, Any], api_key: str, *, upload_files: bool = False) -> 
 
 def main() -> None:
     prompt_update_check_install()
+    help_default_model = (
+        get_default_model("reason")
+        if any(arg in ("-h", "--help") for arg in sys.argv[1:])
+        else "loaded from CDN/fallback configuration"
+    )
     parser = argparse.ArgumentParser(
         description="Visual reasoning with QVQ/thinking VL models (always streaming)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -122,7 +127,7 @@ request JSON fields (--request / --file):
   video             Video URL or local path
   video_frames      Array of frame image URLs/paths (alternative to video)
   fps               Frame sampling rate for video (default: auto)
-  model             Model ID (default: qvq-max)
+  model             Model ID (default: {help_default_model})
   enable_thinking   true/false — override thinking mode (QVQ always thinks)
   thinking_budget   Max thinking tokens
   max_tokens        Max output tokens (default: 8192)
@@ -134,7 +139,7 @@ input types (provide exactly one):
   video_frames  Video from extracted frames (array of image paths)
 
 models:
-  qvq-max           (default) Visual reasoning specialist (always-on thinking)
+  qvq-max           Visual reasoning specialist (always-on thinking)
   qwen3-vl-plus     General vision with optional thinking mode
   qwen3.5-plus      Unified multimodal with thinking on by default
 
@@ -157,12 +162,12 @@ examples:
   # Video reasoning
   python scripts/reason.py --request '{"prompt":"What happens and why?",
     "video":"clip.mp4","fps":2}' --print-response
-""",
+""".replace("{help_default_model}", help_default_model),
     )
     parser.add_argument("--request", help="Inline JSON: must contain 'prompt' + image/video input")
     parser.add_argument("--file", help="Path to JSON request file")
     parser.add_argument("--model", type=str, default=None,
-                        help="Model ID (default: %s)" % DEFAULT_MODEL)
+                        help=f"Model ID (default: {help_default_model})")
     parser.add_argument("--upload-files", action="store_true",
                         help="Upload local files to temp storage (oss://) instead of base64")
     parser.add_argument("--output", default="", help="Save result JSON to this path")
@@ -180,7 +185,7 @@ examples:
     if args.model:
         req["model"] = args.model
     elif "model" not in req or not req.get("model"):
-        req["model"] = DEFAULT_MODEL
+        req["model"] = get_default_model("reason")
 
     validate_token_plan_model(api_key, req["model"])
 

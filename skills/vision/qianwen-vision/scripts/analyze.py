@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from vision_lib import (  # noqa: E402
     chat_url,
     extract_text,
+    get_default_model,
     http_post,
     load_request,
     prompt_update_check_install,
@@ -38,7 +39,6 @@ from vision_lib import (  # noqa: E402
     validate_token_plan_model,
 )
 
-DEFAULT_MODEL = "qwen3.7-plus"
 DEFAULT_MAX_TOKENS = 512
 DEFAULT_TEMPERATURE = 0.2
 DEFAULT_DETAIL = "auto"
@@ -147,7 +147,7 @@ def analyze(
     if not prompt:
         raise ValueError("prompt is required")
 
-    model = req.get("model", DEFAULT_MODEL)
+    model = req["model"] if "model" in req else get_default_model("analyze")
     detail = req.get("detail", DEFAULT_DETAIL)
     json_mode = bool(req.get("json_mode", False))
     schema_obj = req.get("schema")
@@ -198,6 +198,11 @@ def analyze(
 
 def main() -> None:
     prompt_update_check_install()
+    help_default_model = (
+        get_default_model("analyze")
+        if any(arg in ("-h", "--help") for arg in sys.argv[1:])
+        else "loaded from CDN/fallback configuration"
+    )
     parser = argparse.ArgumentParser(
         description="Analyze images/videos with Qwen VL models",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -209,7 +214,7 @@ request JSON fields (--request / --file):
   video               Video URL or local path
   video_frames        Array of frame image URLs/paths (alternative to video)
   fps                 Frame sampling rate for video (default: auto)
-  model               Model ID (default: qwen3.7-plus)
+  model               Model ID (default: {help_default_model})
   detail              Image detail level: "auto" | "low" | "high"
   json_mode           true — request JSON-only output (also via --json-mode)
   schema              JSON Schema object for structured extraction
@@ -247,12 +252,12 @@ examples:
   # High-res mode for fine text/details
   python scripts/analyze.py --request '{"prompt":"Read all text",
     "image":"document.jpg","vl_high_resolution_images":true}' --print-response
-""",
+""".replace("{help_default_model}", help_default_model),
     )
     parser.add_argument("--request", help="Inline JSON: must contain 'prompt' + image/video input")
     parser.add_argument("--file", help="Path to JSON request file")
     parser.add_argument("--model", type=str, default=None,
-                        help="Model ID (default: %s)" % DEFAULT_MODEL)
+                        help=f"Model ID (default: {help_default_model})")
     parser.add_argument("--json-mode", action="store_true", help="Request JSON-only output")
     parser.add_argument("--schema", default="", help="JSON Schema file path or inline JSON string")
     parser.add_argument("--stream", action="store_true",
@@ -274,7 +279,7 @@ examples:
     if args.model:
         req["model"] = args.model
     elif "model" not in req or not req.get("model"):
-        req["model"] = DEFAULT_MODEL
+        req["model"] = get_default_model("analyze")
 
     validate_token_plan_model(api_key, req["model"])
 

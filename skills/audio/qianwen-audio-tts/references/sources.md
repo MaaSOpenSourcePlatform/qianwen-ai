@@ -13,6 +13,7 @@
 ## Voice List
 
 - **Supported voices**: https://platform.qianwenai.com/docs/api-reference/speech-synthesis/voice-list
+- **Qwen-Audio-TTS voices**: https://platform.qianwenai.com/docs/api-reference/speech-synthesis/qwen-audio-tts/voice-list
 
 ## Models
 

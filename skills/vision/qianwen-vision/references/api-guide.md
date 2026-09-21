@@ -12,23 +12,7 @@ Qwen-VL vision-language models accessed through the **OpenAI-compatible** interf
 
 ## Use Cases
 
-| Scenario | Recommended Model | Notes |
-|----------|------------------|-------|
-| General image/video understanding | `qwen3.8-max` | Strongest flagship — 2.4T MoE, top-tier multimodal. Thinking on by default. 1M context. Highest cost. |
-| General image/video understanding | `qwen3.7-plus` | **Preferred choice.** Next-gen multimodal vision-language, enhanced Agent execution & coding, GUI perception. 1M context. Thinking on by default. |
-| General image/video understanding | `qwen3.6-plus` | Multimodal (text+image+video). Strong coding & universal recognition. 1M context. Thinking on by default. |
-| General image/video understanding (alt) | `qwen3.5-plus` | Unified multimodal (text+image+video). Thinking on by default. 1M context. |
-| High-perf cost-efficient vision | `qwen3.7-flash` | Surpasses qwen3.6-flash — enhanced universal recognition, Agent execution, vibe coding. Thinking on by default. 1M context. Best cost-efficiency. |
-| Fast multimodal | `qwen3.5-flash` | Cheaper and faster. Thinking on by default. |
-| High-precision localization / document parsing | `qwen3-vl-plus` | Best for 2D/3D object localization, agent tool calling, QwenVL HTML/Markdown parsing. |
-| High throughput / low latency vision | `qwen3-vl-flash` | 33 languages. Tool calling. |
-| Deep visual reasoning | `qvq-max` | Chain-of-thought reasoning. **Streaming output only.** |
-| OCR text recognition | `qwen3.5-ocr` | Latest recommended OCR model. PDF parsing, multi-turn, ID/card enhanced. Also supports `qwen-vl-ocr`. See [ocr.md](ocr.md). |
-| Chart / table extraction | `qwen3.8-max` / `qwen3.6-plus` / `qwen3-vl-plus` + JSON Schema | Structured output (non-thinking mode). |
-| Video understanding | `qwen3.8-max` / `qwen3.7-flash` / `qwen3.6-plus` | Up to 2h video. Use `fps` to control frame extraction. |
-| Video reasoning | `qvq-max` / `qwen3.8-max` / `qwen3.6-plus` | Chain-of-thought analysis of video content. QVQ: 2s-10min; Qwen3.8/3.7/3.6/3.5: up to 2h. |
-| Agent tool calling | `qwen3.8-max` / `qwen3.7-flash` / `qwen3.6-plus` / `qwen3-vl-plus` / `qwen3-vl-flash` | Function calling support. |
-| Multimodal Agent (Search/CI) | `qwen3.7-flash` / `qwen3.8-max` | Enhanced end-to-end agent execution. qwen3.7-flash: optimized for multimodal Agent scenarios. |
+Fetch and read the current [Qwen vision model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-vision-models.md) for scenario recommendations, defaults, and basic model information. If CDN access fails, use the [local fallback](../cdn/references/qianwen-vision-models.md).
 
 ---
 
@@ -241,7 +225,7 @@ for chunk in stream:
 
 | Parameter | Description |
 |-----------|-------------|
-| `model` | `qwen3.8-max` (strongest), `qwen3.7-plus` (preferred), `qwen3.7-flash` (cost-efficient), `qwen3.6-plus`, `qwen3.5-plus`, `qwen3.5-flash`, `qwen3-vl-plus`, `qwen3-vl-flash`, `qvq-max`, `qwen3.5-ocr`, `qwen-vl-ocr`. |
+| `model` | Model ID; fetch the CDN model catalog linked above for the current list and recommendations. |
 | `messages` | Multimodal message array. The `content` field mixes `text`, `image_url`, `video_url`, and `video` (image list) objects. |
 | `temperature` | Controls randomness [0, 2). For precise extraction, use 0.1–0.2. |
 | `max_tokens` | Maximum output tokens. |
@@ -251,7 +235,7 @@ for chunk in stream:
 | `enable_thinking` | Enable chain-of-thought reasoning. Pass via `extra_body` (OpenAI SDK) or top-level (HTTP). See [visual-reasoning.md](visual-reasoning.md). |
 | `thinking_budget` | Max tokens for reasoning process. Controls thinking depth and cost. Pass via `extra_body` (OpenAI SDK). |
 | `vl_high_resolution_images` | Maximize image resolution (up to 16384 visual tokens). Pass via `extra_body` (OpenAI SDK). |
-| `tools` | Function calling definitions. Supported by qwen3.8-max/flash, qwen3.7-plus/flash, qwen3.6-plus/flash, qwen3.5-plus/flash, qwen3-vl-plus/flash. |
+| `tools` | Function calling definitions; fetch the CDN model catalog linked above for current model compatibility. |
 | `min_pixels` / `max_pixels` | Pixel control for image resolution. Set inside `image_url` object. Active when `vl_high_resolution_images` is false/unset. |
 
 ### File Input Methods
@@ -262,7 +246,7 @@ The OpenAI-compatible API accepts: **HTTP/HTTPS URL**, **Base64 data URI**, and 
 
 | Method | Format | Size Limit | Best For |
 |--------|--------|-----------|----------|
-| Online URL | `https://img.alicdn.com/imgextra/i1/NotRealJustExample/image.jpg` | 20 MB (Qwen3.8/3.7/3.6/3.5 & Qwen3-VL series) / 10 MB (others) for images; up to 2 GB for videos | **Videos, large images, production use** |
+| Online URL | `https://img.alicdn.com/imgextra/i1/NotRealJustExample/image.jpg` | Model-specific; fetch the CDN model catalog linked above | **Videos, large images, production use** |
 | Base64 data URI | `data:image/jpeg;base64,/9j/...` | < 7 MB original file only | Small local files (images, short video clips) |
 | Temp upload (`oss://`) | `oss://dashscope-instant/...` | Up to 100 MB (local upload) | **Local videos, large local files** |
 
@@ -275,24 +259,22 @@ The OpenAI-compatible API accepts: **HTTP/HTTPS URL**, **Base64 data URI**, and 
 
 ## Important Notes
 
-1. **Qwen3.8-Max is the strongest flagship.** `qwen3.8-max` is the most capable model — 2.4T MoE, top-tier multimodal. Use it for the most complex reasoning tasks. Higher cost.
-2. **Qwen3.7-Plus is the preferred choice.** `qwen3.7-plus` is the recommended default — next-gen multimodal vision-language with enhanced Agent execution, coding, and GUI perception. Use `qwen3-vl-plus` when precise 2D/3D localization is needed.
-3. **Qwen3.7-Flash is the best cost-efficient option.** `qwen3.7-flash` surpasses qwen3.6-flash across all multimodal dimensions — enhanced universal recognition, multimodal Agent (Search Agent, CI Agent), and vibe coding. 1M context, thinking on by default. Best for high-performance vision at lower cost.
-4. **Larger images consume more tokens.** Use `detail: "low"` when fine detail is not needed. Use `vl_high_resolution_images: true` only for fine text or small objects.
-5. **QVQ models support streaming output only.** `qvq-max` requires `stream=True`. Non-streaming calls will return an error.
-6. **Structured output requires non-thinking mode.** JSON Schema output is only supported when `enable_thinking` is `false`. For Qwen3.8/Qwen3.7-flash/Qwen3.6/Qwen3.5 (thinking on by default), explicitly set `enable_thinking: false` when using structured output.
-7. **Video fps parameter.** Use `fps` to control frame extraction frequency. High-speed motion: higher fps. Static/long videos: lower fps for efficiency.
-8. **Use the dedicated model for OCR.** `qwen3.5-ocr` (default) is the latest recommended OCR model; `qwen-vl-ocr` is also available. Both achieve higher accuracy than general VL models for text recognition.
-9. **Multi-turn conversations preserve context.** Alternate `user` and `assistant` roles in messages. The model remembers previously provided images.
-10. **JSON structured extraction.** Use `json_mode` or `schema` to force the model to output JSON, suitable for automated pipelines.
-11. **Video audio not supported.** Vision models do not understand audio from video files. For audio, use omni models.
+1. **Model selection and defaults change over time.** Fetch and read the CDN model catalog linked above before selecting or recommending a model.
+2. **Larger images consume more tokens.** Use `detail: "low"` when fine detail is not needed. Use `vl_high_resolution_images: true` only for fine text or small objects.
+3. **Streaming requirements are model-specific.** Models explicitly marked as streaming-only in the CDN model catalog require streaming. Do not infer that every thinking-only model rejects non-streaming calls.
+4. **Structured output requires non-thinking mode.** JSON Schema output is only supported when `enable_thinking` is `false`; fetch the CDN catalog for current model defaults.
+5. **Video fps parameter.** Use `fps` to control frame extraction frequency. High-speed motion: higher fps. Static/long videos: lower fps for efficiency.
+6. **Use a dedicated model for OCR.** Fetch the CDN model catalog linked above for the current default and alternatives.
+7. **Multi-turn conversations preserve context.** Alternate `user` and `assistant` roles in messages. The model remembers previously provided images.
+8. **JSON structured extraction.** Use `json_mode` or `schema` to force the model to output JSON, suitable for automated pipelines.
+9. **Video audio not supported.** Vision models do not understand audio from video files. For audio, use omni models.
 
 ---
 
 ## FAQ
 
 **Q: Should I use qwen3.8-max, qwen3.7-plus, qwen3.7-flash, or qwen3-vl-plus?**
-A: Use `qwen3.7-plus` as the default — it's the next-gen multimodal vision-language model with enhanced Agent execution, coding, and GUI perception. Use `qwen3.8-max` when you need the absolute strongest reasoning (higher cost). Use `qwen3.7-flash` when you want high-performance vision at lower cost — it surpasses qwen3.6-flash in all multimodal capabilities including Agent execution and vibe coding. Use `qwen3-vl-plus` when you need precise object localization (2D/3D bounding boxes), document parsing to QwenVL HTML/Markdown format, or agent tool calling with vision.
+A: Fetch and read the CDN model catalog linked above for the default and scenario recommendations.
 
 **Q: How do I reduce token consumption for image understanding?**
 A: (1) Set `detail: "low"` to reduce image tokens. (2) Crop or resize the image to the relevant area. (3) Use the flash model. (4) Don't set `vl_high_resolution_images: true` unless needed.
@@ -301,13 +283,13 @@ A: (1) Set `detail: "low"` to reduce image tokens. (2) Crop or resize the image 
 A: Yes. Pass multiple `image_url` objects in the `content` array, along with a text instruction (e.g., "Compare these images", "Find the differences").
 
 **Q: How long a video can the model understand?**
-A: Qwen3.8/Qwen3.7/Qwen3.6/Qwen3.5 supports up to 2 hours, Qwen3-VL-Plus up to 1 hour. Use `fps` to control frame extraction. Lower fps for long videos. Videos are frame-sampled; audio is not supported.
+A: Fetch the CDN model catalog linked above for current model-family limits. Use `fps` to control frame extraction; lower it for long videos. Videos are frame-sampled and audio is not supported.
 
 **Q: How do I extract table data from an image?**
-A: Use `qwen3.7-plus` (with `enable_thinking: false`) or `qwen3-vl-plus` with JSON Schema structured output. The skill script supports `--schema`.
+A: Fetch the CDN model catalog linked above for the current recommendation, then use JSON Schema structured output with thinking disabled. The skill script supports `--schema`.
 
 **Q: How do I use local images/videos?**
 A: Pass the file path directly (`"image": "/path/to/file.jpg"`). By default the script converts to Base64 — this only works for files **< 7 MB**. For larger files or videos, **always** add `--upload-files` to auto-upload to DashScope temp storage (oss:// URL, 48 h TTL). When using the OpenAI SDK directly, upload the file to get a URL first — do NOT base64-encode large files.
 
 **Q: When should I enable thinking mode?**
-A: Enable for complex tasks: math problems, chart analysis, multi-step reasoning. Don't enable for simple tasks (captioning, basic Q&A) — it increases latency and cost. Qwen3.8/Qwen3.7-flash/Qwen3.6/Qwen3.5 has thinking on by default; disable with `enable_thinking: false` for simple tasks.
+A: Enable it for complex tasks such as math problems, chart analysis, and multi-step reasoning. Do not enable it for simple tasks merely by default because it increases latency and cost. Fetch the CDN model catalog linked above for current per-model defaults.

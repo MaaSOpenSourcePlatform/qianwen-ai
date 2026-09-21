@@ -10,9 +10,9 @@ Generate videos using Wan and HappyHorse models. All tasks are **asynchronous** 
 completion.
 This skill is part of **QianWen-AI/qianwen-ai**.
 
-> **⚠️ Critical Parameter Differences by Mode:**
+> **⚠️ Critical Parameter Differences:**
 > - **kf2v (First+Last Frame)**: Duration is **fixed at 5 seconds** — other values will fail. Output is **silent only**.
-> - **Resolution parameter varies**: t2v/r2v/vace use `size` (e.g. `"1280*720"`); i2v/kf2v use `resolution` (e.g. `"720P"`).
+> - **Resolution parameters vary by model family, not mode alone**: Check the current model catalog before choosing `size`, `resolution`, or `ratio`. For example, `happyhorse-1.1-t2v` uses `resolution` + `ratio`, while `wan2.6-t2v` uses `size`.
 
 ## Skill directory
 
@@ -51,14 +51,11 @@ print(detect_api_key_type('scripts/qianwen_lib.py'))
 
 | Output | Meaning |
 |--------|---------|
-| `token-plan` | Token Plan key — use only models from the Token Plan list below. |
+| `token-plan` | Token Plan key — use only models from the Token Plan catalog below. |
 | `payg` | Pay-as-you-go key — full model catalog available. |
 | `not-set` | No key configured. |
 
-For Token Plan, use an exact model from qianwen-model-selector, or consult
-`qianwen-ops-auth/references/tokenplan.md`. If unavailable, use:
-- Personal: https://platform.qianwenai.com/docs/token-plan/personal/token-plan-personal-overview.md
-- Team: https://platform.qianwenai.com/docs/token-plan/team/token-plan-team-overview.md
+For Token Plan, fetch and read the current [Token Plan model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-token-plan-models.md), then use an exact listed model. If CDN access fails, use the [local fallback](cdn/references/qianwen-token-plan-models.md).
 
 Token Plan does not support local file upload; for i2v/r2v/kf2v modes, provide reference images/videos
 as accessible URLs (`https://` or `oss://`) rather than local paths.
@@ -74,93 +71,24 @@ guess or probe model availability. For PAYG, continue below.
 | Animate a single image | **i2v** | `img_url` or `reference_image` |
 | wan2.7 unified i2v: first frame, first+last frame, video continuation, audio sync | **i2v** | `media[]`, `first_frame_url`, `first_clip_url`, `driving_audio_url` |
 | Transition between two images (**⚠️ 5s fixed, silent only**) | **kf2v** | `first_frame_url` + `last_frame_url` |
-| Role-play: make characters act a new script | **r2v** | `reference_urls` (up to 5) |
-| Video editing: multi-image ref, repainting, local edit, extend, outpaint | **vace** | `function` (default `wanx2.1-vace-plus`) |
-| Video editing (no `function` field, uses media array) | **videoedit** | model = `wan2.7-videoedit` or `happyhorse-1.0-video-edit` |
+| Role-play: make characters act a new script | **r2v** | `reference_urls` or `media`; read the CDN model catalog for model-specific limits |
+| Video editing: multi-image ref, repainting, local edit, extend, outpaint | **vace** | `function`; read the CDN model catalog for the current default |
+| Video editing (no `function` field, uses media array) | **videoedit** | `model`; read the CDN model catalog for supported models |
 
 ### Model Selection
 
 1. **User specified a model** → use directly.
 2. **Consult the qianwen-model-selector skill** when model choice depends on capability, scenario, or pricing.
-3. **No signal, clear task** → defaults: t2v → `happyhorse-1.1-t2v`, i2v → `happyhorse-1.1-i2v`, kf2v → `wan2.2-kf2v-flash`, r2v → `happyhorse-1.1-r2v`, vace → `wanx2.1-vace-plus`, videoedit → `wan2.7-videoedit`. t2v/i2v/r2v defaults (HappyHorse 1.1) are TP+PAYG compatible with audio output, 3–15s; kf2v/vace/videoedit defaults are **PAYG-only**. For wan2.6 features (multi-shot, `size` param), explicitly set `--model wan2.6-t2v` / `--model wan2.6-i2v-flash`. For wan2.7 features, explicitly set `--model wan2.7-t2v` / `--model wan2.7-i2v` / `--model wan2.7-videoedit`. For HappyHorse 1.0 series, set `--model happyhorse-1.0-{t2v,i2v,r2v,video-edit}`.
 
-## Models
-
-### t2v (Text-to-Video)
-
-| Model | Features |
-|-------|----------|
-| `wan2.7-t2v` | Ratio control, auto-dubbing, 5000 char prompt, 720P/1080P. Use `resolution` + `ratio` params. |
-| `wan2.7-t2v-2026-06-12` | Snapshot of wan2.7-t2v. Same capabilities. |
-| `wan2.6-t2v` | Audio, multi-shot, 2–15s, 720P/1080P. Use `size` param. |
-| `wan2.5-t2v-preview` | Audio, 5s/10s, 480P/720P/1080P |
-| `wan2.2-t2v-plus` | Silent, 5s, 480P/1080P |
-
-### i2v (Image-to-Video)
-
-| Model | Features |
-|-------|----------|
-| `wan2.7-i2v` | Unified protocol: first frame, first+last frame, video continuation, audio sync. Uses `media[]` array. |
-| `wan2.6-i2v-flash` | Audio/silent, multi-shot, 2–15s, 720P/1080P. Uses `img_url`. |
-| `wan2.6-i2v` | Audio, multi-shot, 2–15s, 720P/1080P |
-| `wan2.5-i2v-preview` | Audio, 5s/10s, 480P/720P/1080P |
-
-### kf2v / r2v / vace
-
-| Model                                       | Features                                                            |
-|---------------------------------------------|---------------------------------------------------------------------|
-| `wan2.2-kf2v-flash` **(kf2v default)**      | Silent, 5s, 480P/720P/1080P                                         |
-| `wan2.7-r2v`                                | **Multi-reference (image/video/audio)** role-play. `input.media=[{type,url}]` up to 5 mixed refs (`reference_image`/`reference_video`/`reference_audio`). `resolution` 720P/1080P + `duration` ≤10s, no `ratio`. **PAYG-only.** |
-| `wan2.7-r2v-2026-06-12`                     | Snapshot of wan2.7-r2v. Subject reference + voice customization + storyboard. |
-| `wan2.6-r2v`                                | Audio, single/multi character, 2–10s, 720P/1080P                    |
-| `wan2.6-r2v-flash`                          | Audio/silent, multi-character, 2–10s, 720P/1080P. PAYG-only.        |
-| `wanx2.1-vace-plus` **(vace)**               | Multi-image ref, repainting, local edit, ≤5s, 720P                  |
-
-### wan3.0-video / wan3.0-video-prime (All-in-One t2v + i2v)
-
-Unified all-in-one models supporting both text-to-video (t2v) and image-to-video (i2v)
-in a single model. Mode is auto-detected: **t2v** when only `prompt` is given, **i2v** when
-a reference image is supplied (`img_url` / `reference_image` / `media`). **PAYG-only.**
-
-| Model                 | Features                                                                     |
-|-----------------------|------------------------------------------------------------------------------|
-| `wan3.0-video`        | t2v + i2v, `resolution` 480P/720P/1080P + `ratio` (adaptive/16:9/9:16/1:1) + `duration` ≤30s. i2v uses `input.media=[{type:reference_image,url}]`. |
-| `wan3.0-video-prime`  | Higher-quality variant of wan3.0-video. Same payload/parameters.             |
-
-> **PAYG-only**: `wan2.7-r2v`, `wan3.0-video`, `wan3.0-video-prime`, `wan2.2-kf2v-flash`, `wanx2.1-vace-plus`, and `wan2.7-videoedit` are **not available on Token Plan**. Under Token Plan, local file upload is unsupported — supply all reference images/videos/audio as accessible URLs (`https://` or `oss://`), never local paths.
-
-### videoedit (Video Editing)
-
-Prompt-driven video editing with optional reference images. No `function` field; uses
-`input.media = [1 video] + [refs]`. Default model: `wan2.7-videoedit`.
-
-| Model                       | Refs cap | Notes                                                                  |
-|-----------------------------|----------|------------------------------------------------------------------------|
-| `wan2.7-videoedit` (default)| ≤4       | Local/global prompt-driven edit; supports `negative_prompt`. |
-| `happyhorse-1.0-video-edit` | ≤5       | Element replacement via reference images; preserves original dynamics. |
-
-For pricing details, see [wan2.7-videoedit](https://www.qianwenai.com/models/wan2.7-videoedit) · [happyhorse-1.0-video-edit](https://www.qianwenai.com/models/happyhorse-1.0-video-edit).
-
-### HappyHorse Series
-
-| Model                       | Mode      | Payload differences vs wan2.6                                         |
-|-----------------------------|-----------|-----------------------------------------------------------------------|
-| `happyhorse-1.1-t2v` **default** | t2v       | **Audio output**, 3–15s, 720P/1080P. TP+PAYG compatible. Uses `resolution` + `ratio` (NOT `size`). Same structure as 1.0-t2v. |
-| `happyhorse-1.1-i2v` **default** | i2v       | **Audio output**, 3–15s, 720P/1080P. TP+PAYG compatible. Uses `media=[{type:'first_frame',url}]` (exactly one). Same constraints as 1.0-i2v. |
-| `happyhorse-1.1-r2v` **default** | r2v       | **Audio output**, 3–15s, 720P/1080P. TP+PAYG compatible. Uses `media=[{type:reference_image,url}]` + `resolution` + `ratio`. Up to 9 refs. |
-| `happyhorse-1.0-t2v`        | t2v       | Uses `resolution` + `ratio` (NOT `size`). |
-| `happyhorse-1.0-i2v`        | i2v       | Uses `media=[{type:'first_frame',url}]` (exactly one). NO `negative_prompt`/`prompt_extend`/`ratio`/`last_frame`/`first_clip`/`driving_audio`. Wan2.6-style `img_url` auto-converted. |
-| `happyhorse-1.0-r2v`        | r2v       | Uses `media=[{type:reference_image,url}]` + `resolution` + `ratio`. Up to 9 refs. |
-| `happyhorse-1.0-video-edit` | videoedit | Uses `input.media = [1 video] + [refs]`. No `function` field. Up to 5 refs. |
+Before selecting, recommending, or defaulting a model, fetch and read the current [Qwen video-generation model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-video-generation-models.md). It contains the model list, basic model information, mode recommendations, compatibility notes, and defaults. If CDN access fails, use the [local fallback](cdn/references/qianwen-video-generation-models.md).
 
 Endpoint: `/services/aigc/video-generation/video-synthesis`.
-
 
 > **⚠️ Important**: The model list above is a **point-in-time snapshot** and may be outdated. Model availability
 > changes frequently. **Always check the [official model list](https://www.qianwenai.com/models)
 > for the authoritative, up-to-date catalog before making model decisions.**
 
-> **Model details**: For more information about a specific model, direct the user to its detail page: `https://www.qianwenai.com/models/<model-name>` (replace `<model-name>` with the exact model ID, e.g. `wan2.7-t2v` → https://www.qianwenai.com/models/wan2.7-t2v). NEVER modify or guess the model name in the URL.
+> **Model details**: For more information about a specific model, direct the user to `https://www.qianwenai.com/models/<model-name>`. Replace `<model-name>` with the exact model ID; never modify or guess it.
 
 > **Dynamic model queries**: If the **qianwen-model-selector** skill or **QianWen CLI** (`qianwen models info <model>`) is available, use it for real-time model data. CLI requires authentication — see the **qianwen-usage** skill for login flow.
 
@@ -196,7 +124,7 @@ If `python3` is not found, try `python --version` or `py -3 --version`. If Pytho
 
 ```bash
 python3 <this-skill-dir>/scripts/video.py \
-  --request '{"prompt":"A detective in a rainy city at night","size":"1280*720","duration":5}' \
+  --request '{"model":"happyhorse-1.1-t2v","prompt":"A detective in a rainy city at night","resolution":"720P","ratio":"16:9","duration":5}' \
   --print-response
 ```
 
@@ -213,7 +141,7 @@ python3 <this-skill-dir>/scripts/video.py \
 | `--poll-interval N` | Seconds between polls (default: 15) |
 | `--timeout N` | Max wait seconds (default: 600) |
 
-> **Model priority**: `--model` CLI flag > `"model"` field in `--request` JSON > built-in default.
+> **Model priority**: `--model` CLI flag > `"model"` field in `--request` JSON > configured default. The configured default is used when no model is specified and is not necessarily the newest or strongest model.
 
 ### Verify Result
 
@@ -247,41 +175,20 @@ If the script fails, match the error output against the diagnostic table below t
 
 All modes require `prompt`. See [request-fields.md](references/request-fields.md) for full field tables per mode.
 
-### ⚠️ Resolution Parameter by Mode (Critical)
+### ⚠️ Resolution Parameters by Model Family (Critical)
 
-| Mode | Parameter | Format | Example |
-|------|-----------|--------|--------|
-| t2v | `size` | `"WxH"` | `"1280*720"`, `"1920*1080"` |
-| r2v | `size` | `"WxH"` | `"1280*720"`, `"1920*1080"` |
-| vace | `size` | `"WxH"` | `"1280*720"` |
-| i2v | `resolution` | `"xxxP"` | `"720P"`, `"1080P"` |
-| kf2v | `resolution` | `"xxxP"` | `"480P"`, `"720P"`, `"1080P"` |
-
-> **Using the wrong parameter name will cause the API call to fail.**
+The resolution field varies by model family. Check the model catalog above before choosing between `size`, `resolution`, and `ratio`; using the wrong field can cause the API call to fail.
 
 ### Mode-Specific Required Fields
 
-- i2v needs `img_url`/`reference_image`. kf2v needs `first_frame_url` + `last_frame_url`. r2v needs `reference_urls`. vace needs `function`.
+- Required fields vary by model family. Use [request-fields.md](references/request-fields.md) for payload shapes and the model catalog above for current model-specific compatibility.
 
 ## Cost Estimation
 
 > 🚨 **NEVER guess or fabricate any price figure.** Always direct the user to the
 > [official pricing page](https://platform.qianwenai.com/docs/developer-guides/getting-started/pricing) for exact rates.
 
-Cost is billed per second of generated video. Price varies by model and resolution. For the latest rates, check
-the [official pricing page](https://platform.qianwenai.com/docs/developer-guides/getting-started/pricing).
-
-| Model            | 720P (USD)         | 1080P (USD)        |
-|------------------|--------------------|--------------------|
-| wan2.7-t2v       | per-second billing | per-second billing |
-| wan2.7-i2v       | per-second billing | per-second billing |
-| wan2.6-t2v       | per-second billing | per-second billing |
-| wan2.6-i2v-flash | per-second billing | per-second billing |
-| wan2.6-r2v-flash | per-second billing | per-second billing |
-
-Quick example: happyhorse-1.1-t2v 5s 720P — check
-the [official pricing page](https://platform.qianwenai.com/docs/developer-guides/getting-started/pricing) for current per-second
-rates. Some models may offer a limited free quota — **do not assume any call is free**; use the **qianwen-usage** skill to check remaining free tier quota, or verify in the user's [QianWen console](https://platform.qianwenai.com/home/benefits).
+Cost is billed per second of generated video. Price varies by model and resolution. Fetch the [CDN model-pricing reference](https://alioth.alicdn.com/skills-info/models/references/qianwen-model-pricing.md), and use the official pricing page for exact current rates. Some models may offer a limited free quota — **do not assume any call is free**; use the **qianwen-usage** skill to check remaining free tier quota, or verify in the user's [QianWen console](https://platform.qianwenai.com/home/benefits). If CDN access fails, use the [local fallback](cdn/references/qianwen-model-pricing.md).
 
 To check actual usage and bills: use the **qianwen-usage** skill, or visit the console:
 [Usage Analytics](https://platform.qianwenai.com/home/analytics) |
@@ -294,7 +201,7 @@ To check actual usage and bills: use the **qianwen-usage** skill, or visit the c
 
 When the user provides local file paths (images, videos, audio), pass them directly to the script. The script **automatically uploads** local files to DashScope temporary storage (`oss://` URL, 48h TTL) and injects the `X-DashScope-OssResourceResolve: enable` header. No manual upload step is needed.
 
-> **Production**: Default temp storage has **48h TTL** and **100 QPS upload limit** — not suitable for production, high-concurrency, or load-testing. To use your own OSS bucket, set `QWEN_TMP_OSS_BUCKET` and `QWEN_TMP_OSS_REGION` in `.env`, install `pip install oss2`, and provide credentials via `QWEN_TMP_OSS_AK_ID` / `QWEN_TMP_OSS_AK_SECRET` or the standard `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`. Use a RAM user with least-privilege (`oss:PutObject` + `oss:GetObject` on target bucket only). If qianwen-ops-auth is installed, see its `references/custom-oss.md` for the full setup guide.
+> **Production**: Default temp storage has **48h TTL** and **100 QPS upload limit** — not suitable for production, high-concurrency, or load-testing. To use your own OSS bucket, set `QWEN_TMP_OSS_BUCKET` and `QWEN_TMP_OSS_REGION` in `.env`, install `pip install alibabacloud-oss-v2`, and provide credentials via `QWEN_TMP_OSS_AK_ID` / `QWEN_TMP_OSS_AK_SECRET` or the standard `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`. Use a RAM user with least-privilege (`oss:PutObject` + `oss:GetObject` on target bucket only). If qianwen-ops-auth is installed, see its `references/custom-oss.md` for the full setup guide.
 
 ## Cross-Skill Chaining
 

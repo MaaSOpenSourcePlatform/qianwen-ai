@@ -6,28 +6,13 @@
 
 ## Definition
 
-Generate and edit images using Wan and Qwen-Image models. The Wan series excels at realistic photography and diverse artistic styles. The Qwen-Image series excels at rendering complex Chinese and English text (posters, layouts). **wan2.7-image-pro / wan2.7-image are multi-function models** supporting text-to-image, image editing (0–9 references), sequential multi-image, interactive editing, and thinking mode. **wan2.6-t2i supports synchronous HTTP calls** for text-to-image. **wan2.6-image supports image editing, style transfer, subject consistency, and interleaved text-image output.** Older models use asynchronous invocation (submit task → poll result).
+Generate and edit images using Wan and Qwen-Image models. Fetch and read the [CDN model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-image-generation-models.md) for current model families, capabilities, defaults, and recommendations. This guide retains the stable API contracts and examples. If CDN access fails, use the [local fallback](../cdn/references/qianwen-image-generation-models.md).
 
 ---
 
 ## Use Cases
 
-| Scenario | Recommended Model | Notes |
-|----------|------------------|-------|
-| General creative / realistic photography | `wan2.7-image` / `wan2.7-image-pro` | Recommended default. Multi-function: t2i + editing, thinking mode, 4K (pro). |
-| General creative (dedicated t2i) | `wan2.6-t2i` | Dedicated t2i model, best quality, supports synchronous calls. |
-| Posters / complex text rendering | `qwen-image-2.0-pro` or `wan2.6-t2i` | Strongest Chinese/English text rendering. `qwen-image-2.0-pro-2026-06-22`: supports 1k token instructions, enhanced rendering. |
-| Fast drafts / batch generation | `wan2.2-t2i-flash` | Lowest latency. |
-| Custom resolutions | `qwen-image-2.0` or Wan series | Flexible aspect ratios. |
-| Image editing / style transfer | `wan2.7-image-pro` / `wan2.7-image` / `wan2.6-image` | wan2.7: 0–9 images, bbox editing, thinking mode. wan2.6: 1–4 images. |
-| Text editing in images / element manipulation | `qwen-image-edit-max` or `qwen-image-2.0-pro` | Precise text modification, element add/delete/replace. |
-| Subject consistency across images | `wan2.7-image-pro` / `wan2.7-image` / `wan2.6-image` | Maintain subject identity across generated images. |
-| Multi-image composition | `wan2.7-image-pro` / `wan2.7-image` / `wan2.6-image` | Combine style from one image with background from another. |
-| Sequential multi-image (same character/story) | `wan2.7-image-pro` / `wan2.7-image` | Coherent image sequences (1–12 images), same subject across scenes. |
-| Interactive editing (region-based) | `wan2.7-image-pro` / `wan2.7-image` | Use `bbox_list` for precise region editing. |
-| Multi-image fusion with text rendering | `qwen-image-2.0-pro` | 1–3 input images, text rendering, realistic textures. |
-| Interleaved text-image output | `wan2.6-image` | Generate mixed text+image content (tutorials, guides). |
-| Fixed-resolution batch text-to-image | `qwen-image-plus` | 5 fixed resolutions, async API, good for batch workflows. |
+Fetch and read the CDN model catalog linked above for scenario recommendations, defaults, and basic model information.
 
 ---
 
@@ -211,18 +196,7 @@ In **interleave mode** (`enable_interleave=true`): use pixel dimensions with tot
 
 ### Overview
 
-The `wan2.7-image-pro` and `wan2.7-image` models are multi-function models that support **both text-to-image and image editing** in a single model. No reference images are required for text-to-image, and up to 9 reference images are supported for editing.
-
-**Key capabilities:**
-- **Text-to-image** (no reference images needed) with optional thinking mode
-- **Sequential multi-image** (`enable_sequential=true`): generate coherent image sequences (1–12 images)
-- **Image editing** with 0–9 reference images
-- **Interactive editing** via `bbox_list` for precise region-based editing
-- **Color palette** customization (3–10 colors)
-
-**wan2.7-image-pro vs wan2.7-image:**
-- `wan2.7-image-pro`: supports 4K resolution for t2i, higher quality. See [model details](https://www.qianwenai.com/models/wan2.7-image-pro).
-- `wan2.7-image`: max 2K resolution, faster. See [model details](https://www.qianwenai.com/models/wan2.7-image).
+Fetch and read the CDN model catalog linked above for current Wan 2.7 capabilities, limits, and model comparisons. The sections below retain the API contracts and examples.
 
 ### Endpoint
 
@@ -325,17 +299,7 @@ curl -sS 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generat
 
 ### Overview
 
-The `wan2.5-i2i-preview` model provides image-to-image editing via a simpler prompt+images API. It preserves subject consistency during edits and supports multi-image fusion with up to 3 reference images.
-
-**Key differences from `wan2.6-image`:**
-
-- Uses `input.prompt` + `input.images[]` format (not messages)
-- **Async-only** (no sync support)
-- Dedicated endpoint: `/api/v1/services/aigc/image2image/image-synthesis`
-- Max 3 images (vs wan2.6-image's 4)
-- Max output resolution: 1280*1280 total pixels (vs wan2.6-image's 2048*2048)
-- Response uses `output.results[].url` format (vs choices format)
-- China (`cn-beijing`) only
+Fetch and read the CDN model catalog linked above for current Wan image-to-image capabilities, limits, and comparisons. The sections below retain the API contracts and examples.
 
 ### Endpoint
 
@@ -408,10 +372,7 @@ Then poll with `GET /api/v1/tasks/{task_id}`. Response contains `output.results[
 
 ### Overview
 
-The Qwen Image series consists of two sub-families with **different API endpoints**:
-
-- **Editing models** (`qwen-image-2.0-pro`, `qwen-image-2.0`, `qwen-image-edit-max/plus/edit`): Use the same `multimodal-generation/generation` endpoint as `wan2.6-image`. Support image editing with 1–3 reference images, and `qwen-image-2.0-pro/2.0` also support pure text-to-image.
-- **Text-to-image models** (`qwen-image-plus`, `qwen-image-max`): Use the `text2image/image-synthesis` endpoint (async-only). Fixed resolutions, `input.prompt` format.
+Fetch and read the CDN model catalog linked above for the current Qwen Image model families and basic capabilities. The sections below retain each API endpoint and payload contract.
 
 ### Editing Models — Endpoint & Parameters
 
@@ -455,7 +416,7 @@ curl -sS 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generat
 
 ### qwen-image-3.0-pro / qwen-image-3.0
 
-**Overview**: The 3.0 series is the latest Qwen-Image generation. It shares the same `messages` payload and sync endpoint as the 2.0/edit models but adds three exclusive parameters (`enable_thinking`, `prompt_extend_mode`) and a smarter resolution behavior (`size` has **no default** — the model auto-recommends resolution from the prompt). `qwen-image-3.0-pro` is the flagship; `qwen-image-3.0` is the general-purpose tier. Both support pure text-to-image and 1–3 reference-image editing.
+Fetch and read the CDN model catalog linked above for current Qwen Image 3.0 capabilities and tier comparisons. The parameter table below remains the API contract.
 
 **Endpoints** (same request body; only the header/URL differ):
 - **Sync**: `POST /api/v1/services/aigc/multimodal-generation/generation` (shared with 2.0 series)
@@ -513,7 +474,7 @@ Then poll with `GET /api/v1/tasks/{task_id}`. Response contains `output.results[
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `n` | 1 | Output images (1–4). **Billed per image.** |
+| `n` | 1 | The API supports 1–4 output images. **Billed per image.** The bundled script currently clamps this field to 1 for this model family; call the API directly to request multiple images. |
 | `size` | `1328*1328` | Fixed resolutions only (see below). |
 | `prompt_extend` | true | Intelligent prompt rewriting. |
 | `watermark` | false | "AI Generated" watermark. |
@@ -537,8 +498,8 @@ Then poll with `GET /api/v1/tasks/{task_id}`. Response contains `output.results[
 1. **Image URLs are valid for only 24 hours.** Download and save images immediately after generation.
 2. **Cost = unit price × number of images.** The `n` and `max_images` parameters directly affect cost. Always set `n=1` during testing.
 3. **prompt_extend trade-off.** Significantly improves short prompts, but adds 3–4s latency and may drift from original intent. Set `prompt_extend=false` when you need precise control over composition.
-4. **Synchronous vs. asynchronous.** wan2.6-t2i, wan2.6-image (editing mode), and qwen-image-edit series support synchronous calls. Interleaved text-image sync requires streaming; use async mode. wan2.5 and earlier models use async only. `qwen-image-plus` and `qwen-image-max` use async text2image endpoint only.
-5. **Prompt length limit.** Supports both Chinese and English. Maximum 2,000 characters for wan2.6-image, 2,100 characters for wan2.6-t2i; excess is automatically truncated. `qwen-image-2.0-pro-2026-06-22` supports up to 1k tokens of instruction input.
+4. **Synchronous vs. asynchronous support is model-specific.** Fetch the CDN model catalog linked above, then use the endpoint and payload contract documented above for the selected model.
+5. **Prompt length is model-specific.** Fetch the CDN model catalog for the current limit; excess may be truncated.
 6. **Region isolation.** API key, endpoint, and model must belong to the same region. Cross-region calls result in authentication failures.
 7. **Async task_id is valid for 24 hours.** Do not create duplicate tasks; use polling to retrieve the result.
 
@@ -547,34 +508,34 @@ Then poll with `GET /api/v1/tasks/{task_id}`. Response contains `output.results[
 ## FAQ
 
 **Q: How do I choose between wan2.6-t2i and qwen-image-2.0-pro?**
-A: Use wan2.6-t2i for realistic photography and diverse artistic styles. Use qwen-image-2.0-pro for complex text rendering tasks (posters, PPT illustrations, coupons). Both handle text well, but Qwen-Image is stronger for complex layouts.
+A: Fetch and read the CDN model catalog linked above for current model comparisons and recommendations.
 
 **Q: When should I use wan2.6-image vs wan2.6-t2i?**
-A: **Always use `wan2.6-t2i` for pure text-to-image (prompt only, no reference images).** `wan2.6-image` is an image editing model — it requires either `reference_images` (1–4 images for style transfer, subject consistency, editing) or `enable_interleave: true` (for interleaved text-image output). Using `wan2.6-image` without either will error or auto-fallback to `wan2.6-t2i`.
+A: Fetch the CDN model catalog for the current model roles, then follow the request contract above for the selected model.
 
 **Q: How do I get more consistent results?**
 A: Use the `seed` parameter to fix the random seed. Disable `prompt_extend` to prevent the LLM from rewriting and drifting from your intent. Use `negative_prompt` to exclude unwanted elements.
 
 **Q: When should I use wan2.7-image-pro vs wan2.6-t2i for text-to-image?**
-A: `wan2.7-image-pro` is a multi-function model — it supports both t2i and image editing in one model, with thinking mode for higher quality and 4K support. Use it when you want the highest quality or may later need editing. `wan2.6-t2i` is a dedicated t2i model — slightly faster for simple text-to-image tasks since it doesn't carry editing overhead.
+A: Fetch and read the CDN model catalog linked above for current model comparisons and recommendations.
 
 **Q: What is sequential multi-image mode?**
-A: Set `enable_sequential=true` with `wan2.7-image-pro` or `wan2.7-image` to generate coherent image sequences (1–12 images) with the same subject across different scenes. Useful for storyboards, character sheets, or seasonal series. Note: thinking_mode is disabled in sequential mode.
+A: Fetch the CDN model catalog to select a model that supports sequential output, then set `enable_sequential=true`. This generates coherent image sequences with the same subject across different scenes. Use the selected model's documented output limit; thinking mode is disabled in sequential mode.
 
 **Q: Does the API support image-to-image / reference images?**
-A: Yes. `wan2.7-image-pro` / `wan2.7-image` support 0–9 reference images with advanced features (bbox editing, sequential mode). `wan2.6-image` supports 1–4 reference images for style transfer, subject consistency, and interleaved output. `qwen-image-edit` series supports 1–3 reference images. Use the `reference_images` field in the script (URLs or local paths; local files are auto-uploaded). For multi-image composition, reference images by order in the prompt: "the style of image 1 and the background of image 2".
+A: Yes. Fetch the CDN model catalog for the current reference-image limits and supported features. Use the `reference_images` field in the script (URLs or local paths; local files are auto-uploaded). For multi-image composition, reference images by order in the prompt: "the style of image 1 and the background of image 2".
 
 **Q: How does interleaved text-image output work?**
-A: Set `enable_interleave=true` with `wan2.6-image`. The model generates mixed text and image content. Use async mode (the script auto-enables it). The response contains interleaved text and image items in `output.choices[0].message.content`. The script saves images and a markdown file. Note: `qwen-image-edit` series does **not** support interleaved output.
+A: Fetch the CDN model catalog to select a model that supports interleaved output, then set `enable_interleave=true`. Use async mode (the script auto-enables it). The response contains interleaved text and image items in `output.choices[0].message.content`; the script saves images and a Markdown file.
 
 **Q: How do I optimize costs for batch generation?**
 A: Set `n=1` to generate and evaluate one image at a time. Increase `n` after confirming quality.
 
 **Q: When to use qwen-image-plus vs qwen-image-2.0-pro for text-to-image?**
-A: `qwen-image-plus` uses the `text2image` endpoint with fixed resolutions — good for batch workflows with standard aspect ratios. `qwen-image-2.0-pro` uses the `multimodal-generation` endpoint with flexible resolutions and can also do image editing. Use `qwen-image-plus` for simple text-to-image; use `qwen-image-2.0-pro` when you need text rendering precision or image editing.
+A: Fetch the CDN model catalog for current recommendations, then use the endpoint sections above for the selected model's request format.
 
 **Q: What's the difference between qwen-image-edit series and wan2.6-image?**
-A: Both use the `multimodal-generation` endpoint with `messages` format. Key differences: qwen-image-edit supports max 3 input images (vs wan's 4), `n` up to 6 (vs wan's 4), and does not support interleaved output. qwen-image-edit excels at precise text editing in images and element manipulation.
+A: Fetch the CDN model catalog for current capability and limit comparisons. Both use the `multimodal-generation` endpoint with `messages` format.
 
 ---
 
@@ -582,7 +543,7 @@ A: Both use the `multimodal-generation` endpoint with `messages` format. Key dif
 
 ### Definition
 
-`z-image-turbo` is an open-source 6B-parameter text-to-image model with 8-step inference, hosted on the QianWen platform. It targets fast, low-cost text-to-image generation. The model has stricter payload constraints than the Wan/Qwen-Image series:
+Fetch the CDN model catalog linked above for the model's current basic information. Its API contract has stricter payload constraints than the Wan/Qwen-Image series:
 
 - **Sync-only** — uses the standard multimodal-generation sync endpoint; async invocation is not supported.
 - **Single text content per message** — `messages[0].content` must contain exactly one `{text}` item.

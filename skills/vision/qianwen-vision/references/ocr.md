@@ -6,18 +6,7 @@
 
 ## Overview
 
-Qwen OCR models are optimized for text extraction and structured data parsing from images: scanned documents, tables, receipts, tickets, ID cards, and handwritten text. Higher accuracy than general VL models for text-heavy images.
-
-The default model is **qwen3.5-ocr** — the latest recommended OCR model with PDF parsing, multi-turn conversation, and enhanced ID/card recognition. The legacy `qwen-vl-ocr` remains available for explicit selection.
-
----
-## Supported Models
-
-| Model | Region | Notes |
-|-------|--------|-------|
-| `qwen3.5-ocr` (default) | China (cn-beijing) | Latest recommended. PDF parsing, multi-turn, enhanced card/ID recognition. Context 65,536 / max input 49,152 / max output 16,384 tokens. |
-| `qwen-vl-ocr` (stable) | China (cn-beijing) | Legacy OCR model. |
-| `qwen-vl-ocr-2025-11-20` | China (cn-beijing) | Pinned version of qwen-vl-ocr |
+Fetch and read the current [Qwen vision model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-vision-models.md) for OCR model recommendations, defaults, supported models, regions, and basic capabilities. If CDN access fails, use the [local fallback](../cdn/references/qianwen-vision-models.md).
 
 ---
 
@@ -149,7 +138,7 @@ curl -X POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions 
 
 ## Important Notes
 
-1. **Use qwen3.5-ocr (or qwen-vl-ocr) for text-heavy images.** General VL models (qwen3-vl-plus) handle OCR but with lower accuracy on dense text.
+1. **Use a dedicated OCR model for text-heavy images.** Fetch the CDN model catalog linked above for the current recommendation and alternatives.
 2. **Pixel parameters control cost.** Higher `max_pixels` = more tokens = better accuracy but higher cost. For simple text, lower values suffice.
 3. **SDK version requirements**: DashScope Python SDK >= 1.22.2, Java SDK >= 2.21.8.
 4. **DashScope-only features**: Image rotation correction and built-in OCR task types are only available through the DashScope native API, not through the OpenAI-compatible API.

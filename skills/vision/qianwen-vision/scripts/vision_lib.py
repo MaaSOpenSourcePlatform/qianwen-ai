@@ -26,6 +26,7 @@ from qianwen_lib import (  # noqa: E402,F401
     extract_text,
     has_oss_url,
     http_post,
+    load_cdn_model_config,
     load_request,
     native_base_url,
     require_api_key as _require_api_key_base,
@@ -37,6 +38,22 @@ from qianwen_lib import (  # noqa: E402,F401
     upload_local_file,
     validate_token_plan_model,
 )
+
+
+def get_default_model(task: str) -> str:
+    """Return the current default model for a vision task from the CDN config."""
+    config = load_cdn_model_config(
+        "qianwen-vision-config.json",
+        required_keys=("default_models",),
+    )
+    defaults = config["default_models"]
+    if not isinstance(defaults, dict):
+        raise RuntimeError("Invalid vision model configuration: default_models must be an object")
+    model = defaults.get(task)
+    if not isinstance(model, str) or not model:
+        raise RuntimeError(f"Invalid vision model configuration: missing default for {task}")
+    return model
+
 
 # ---------------------------------------------------------------------------
 # Vision-specific credential wrapper

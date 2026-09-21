@@ -1,0 +1,7 @@
+{
+  "default_models": {
+    "analyze": "qwen3.8-flash",
+    "reason": "qwen3.8-max",
+    "ocr": "qwen3.8-flash"
+  }
+}

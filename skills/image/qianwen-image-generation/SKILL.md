@@ -43,14 +43,11 @@ print(detect_api_key_type('scripts/qianwen_lib.py'))
 
 | Output | Meaning |
 |--------|---------|
-| `token-plan` | Token Plan key — use only models from the Token Plan list below. |
+| `token-plan` | Token Plan key — use only models from the Token Plan catalog below. |
 | `payg` | Pay-as-you-go key — full model catalog available. |
 | `not-set` | No key configured. |
 
-For Token Plan, use an exact model from qianwen-model-selector, or consult
-`qianwen-ops-auth/references/tokenplan.md`. If unavailable, use:
-- Personal: https://platform.qianwenai.com/docs/token-plan/personal/token-plan-personal-overview.md
-- Team: https://platform.qianwenai.com/docs/token-plan/team/token-plan-team-overview.md
+For Token Plan, fetch and read the current [Token Plan model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-token-plan-models.md), then use an exact listed model. If CDN access fails, use the [local fallback](cdn/references/qianwen-token-plan-models.md).
 
 Token Plan does not support local file upload; for i2i mode, provide reference images as accessible
 URLs (`https://` or `oss://`) rather than local paths.
@@ -60,88 +57,16 @@ guess or probe model availability. For PAYG, continue below.
 
 ## Mode Selection Guide
 
-| User Want | Mode | Model |
-|-----------|------|-------|
-| Generate image from text only | **t2i** | `wan2.7-image` (default), or `wan2.7-image-pro` / `wan2.6-t2i` |
-| Open-source / lowest-cost text-to-image | **t2i** | `z-image-turbo` (sync-only; no `n`; no reference images) |
-| Edit image / apply style transfer based on 1–4 reference images | **image-edit** | `wan2.7-image-pro` / `wan2.7-image` / `wan2.6-image` |
-| Subject consistency: generate new images maintaining subject from references | **image-edit** | `wan2.7-image-pro` / `wan2.7-image` / `wan2.6-image` |
-| Multi-image composition: combine style from one image, background from another | **image-edit** | `wan2.7-image-pro` / `wan2.7-image` / `wan2.6-image` |
-| Single-image editing preserving subject consistency | **i2i** | `wan2.5-i2i-preview` |
-| Multi-image fusion: place object from one image into another scene | **i2i** | `wan2.5-i2i-preview` |
-| Interleaved text-image output (e.g., tutorials, step-by-step guides) | **interleave** | `wan2.6-image` |
-| Fast text-to-image drafts | **t2i** | `wan2.2-t2i-flash` |
-| Edit text within images, precise element manipulation | **image-edit** | `qwen-image-3.0-pro` / `qwen-image-3.0` / `qwen-image-2.0-pro` |
-| Multi-image fusion with realistic textures | **image-edit** | `qwen-image-3.0-pro` / `qwen-image-3.0` / `qwen-image-2.0-pro` |
-| Posters / complex Chinese+English text rendering | **t2i** | `qwen-image-3.0-pro` / `qwen-image-3.0` / `qwen-image-2.0-pro` |
-| Highest quality text-to-image with strong text rendering | **t2i** | `qwen-image-3.0-pro` (flagship) / `qwen-image-3.0` |
-| Text-to-image with fixed aspect ratios (batch) | **t2i** | `qwen-image-plus` / `qwen-image-max` |
-
-## Model Selection
-
-### Wan Series (default)
-
-| Model | Use Case |
-|-------|----------|
-| wan2.6-t2i | Text-to-image only — sync + async, dedicated t2i model |
-| **wan2.7-image-pro** | **Multi-function** (4K support) — text-to-image, image editing (0–9 images), sequential multi-image, interactive editing (bbox), thinking mode, color palette. Max 4K for t2i, 2K for editing |
-| **wan2.7-image** | **Recommended default** — multi-function: text-to-image, image editing, interleaved; sync + async (faster than pro, max 2K) |
-| **wan2.6-image** | **Image editing** (NOT for pure text-to-image) — requires `reference_images` or `enable_interleave: true`. Style transfer, subject consistency (1–4 images), interleaved text-image output, 2K |
-| **wan2.5-i2i-preview** | **Image editing** — single-image editing with subject consistency, multi-image fusion (up to 3 images), async-only |
-| **wan2.5-t2i-preview** | Preview — free size within constraints |
-| **wan2.2-t2i-flash** | Fast — lower latency |
-| **wan2.2-t2i-plus** | Professional — improved stability |
-
-### Other
-
-| Model | Use Case |
-|-------|----------|
-| **z-image-turbo** | **Open-source SOTA T2I** — sync-only; single text content per message; **no `n` parameter** (server returns 400 if provided); **no reference images**. Parameters: `size`, `prompt_extend`, `seed`. |
-
-### Qwen Image Series
-
-| Model | Use Case |
-|-------|----------|
-| **qwen-image-3.0-pro** | **Latest flagship** — high quality, strong text rendering, fused generation + multi-image editing. Exclusive params: `enable_thinking`, `prompt_extend_mode`; `size` has no default (model auto-recommends); prompt ≤4500 Token |
-| **qwen-image-3.0** | **Latest-generation** — general-purpose generation + editing, strong text rendering. Same 3.0 exclusive params as pro |
-| **qwen-image-2.0-pro** | Fused generation + editing — text rendering (significantly enhanced), realistic textures, multi-image (1–3 input, 1–6 output). Supports up to 1k token instruction input. Snapshot: `qwen-image-2.0-pro-2026-06-22` |
-| **qwen-image-2.0** | Accelerated generation + editing |
-| **qwen-image-edit-max** | Image editing — 1–6 output images |
-| **qwen-image-edit-plus** | Image editing — 1–6 output images |
-| **qwen-image-edit** | Image editing — 1 output image only |
-| **qwen-image-plus** | Text-to-image — fixed resolutions only (async) |
-| **qwen-image-max** | Text-to-image — fixed resolutions only |
-
-Qwen Image editing models (`qwen-image-2.0-pro`, `qwen-image-2.0`, `qwen-image-edit-max/plus/edit`) use the same sync endpoint as `wan2.6-image` (`/multimodal-generation/generation`) with `messages` format. They support text editing in images, element add/delete/replace, style transfer, and multi-image fusion (1–3 input images). Size range: 512x512 to 2048x2048. `qwen-image-2.0-pro` and `qwen-image-2.0` also support pure text-to-image (no reference images needed).
-
-**`qwen-image-3.0-pro` / `qwen-image-3.0` exclusive parameters** (share the same sync endpoint + `messages` format; also support async):
-- `enable_thinking` (default true): enhanced reasoning for quality; set `false` to reduce generation time. Only effective when `prompt_extend=true`; not available in I2I Agent mode.
-- `prompt_extend_mode` (default `direct`=DPE): set `agent`=APE for finer rewriting (text-to-image only).
-- `size`: continuous range (512×512–2048×2048, aspect ratio 1:8–8:1) with **no default** — omit it and the model auto-recommends resolution from the prompt.
-- `n`: 1–6. Prompt length recommended ≤4500 Token (2.0 series is 1300).
-
-**`qwen-image-2.0-pro-2026-06-22` snapshot improvements** (vs 2026-04-22):
-- Text rendering significantly enhanced — Chinese and English text more accurate and readable
-- Supports up to 1k token instruction input (longer than previous snapshots)
-- Realistic textures and photorealistic scene details rendered more finely
-- Stronger semantic adherence — better follows complex multi-part instructions
-
-Qwen Image text-to-image models (`qwen-image-plus`, `qwen-image-max`) use a different endpoint (`/text2image/image-synthesis`) with `input.prompt` format (async-only). They support only 5 fixed resolutions: 1664\*928, 1472\*1104, 1328\*1328, 1104\*1472, 928\*1664.
-
-**Choosing between `wan2.6-image` and `wan2.5-i2i-preview` for image editing:**
-- `wan2.6-image` supports up to 4 images, higher resolution (2K), interleaved text-image output, and sync mode. Use for multi-image style composition, interleaved tutorials.
-- `wan2.5-i2i-preview` uses a simpler prompt-only editing interface (no messages format), supports up to 3 images, async-only. Use for straightforward single-image edits and multi-image object fusion.
-
 1. **User specified a model** → use directly.
 2. **Consult the qianwen-model-selector skill** when model choice depends on requirement, scenario, or pricing.
-3. **Text-to-image (prompt only, no reference images)** → use `wan2.7-image` (default) or `wan2.7-image-pro` (higher quality) / `wan2.6-t2i` (dedicated t2i). **NEVER use `wan2.6-image` for pure text-to-image** — it will error without reference images or `enable_interleave: true`.
-4. **Reference images / image editing / interleaved output** → `wan2.7-image-pro` (recommended), `wan2.7-image`, or `wan2.6-image`.
+
+Before choosing a mode or selecting, recommending, or defaulting a model, fetch and read the current [Qwen image-generation model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-image-generation-models.md). It contains the mode-to-model recommendations, model list, basic model information, compatibility notes, and default model. If CDN access fails, use the [local fallback](cdn/references/qianwen-image-generation-models.md).
 
 > **⚠️ Important**: The model list above is a **point-in-time snapshot** and may be outdated. Model availability
 > changes frequently. **Always check the [official model list](https://www.qianwenai.com/models)
 > for the authoritative, up-to-date catalog before making model decisions.**
 
-> **Model details**: For more information about a specific model, direct the user to its detail page: `https://www.qianwenai.com/models/<model-name>` (replace `<model-name>` with the exact model ID, e.g. `wan2.7-image-pro` → https://www.qianwenai.com/models/wan2.7-image-pro). NEVER modify or guess the model name in the URL.
+> **Model details**: For more information about a specific model, direct the user to `https://www.qianwenai.com/models/<model-name>`. Replace `<model-name>` with the exact model ID; never modify or guess it.
 
 > **Dynamic model queries**: If the **qianwen-model-selector** skill or **QianWen CLI** (`qianwen models info <model>`) is available, use it for real-time model data. CLI requires authentication — see the **qianwen-usage** skill for login flow.
 
@@ -178,7 +103,7 @@ execution.
 **Discovery:** Run `python3 <this-skill-dir>/scripts/image.py --help` first to see all available arguments.
 
 ```bash
-# Text-to-image (wan2.7-image, default)
+# Text-to-image (use the default from the CDN model catalog)
 python3 <this-skill-dir>/scripts/image.py \
   --request '{"prompt":"A cozy flower shop with wooden door"}' \
   --output output/qianwen-image-generation/images/out.png \
@@ -199,7 +124,7 @@ python3 <this-skill-dir>/scripts/image.py \
 | `--request '{...}'` | JSON request body |
 | `--file path.json` | Load request from file |
 | `--async` | Force async mode (required for wan2.5 and older; auto-enabled for qwen-image-plus/max and interleaved output) |
-| `--model ID` | Override model (`wan2.7-image` default; see model list in help) |
+| `--model ID` | Override model (check the model catalog above for the current default) |
 | `--output path` | Save image to path (or directory for multi-image output). When writing multiple images to the same directory, files are automatically named using the unique identifier from the OSS URL, preventing overwrites across runs. Explicit file paths still take priority; use distinct filenames across calls to avoid overwriting |
 | `--print-response` | Print response JSON to stdout |
 
@@ -240,9 +165,9 @@ If the script fails, match the error output against the diagnostic table below t
 |-------|------|-------------|
 | `prompt` | string | Text description of the image to generate (required) |
 | `negative_prompt` | string | Content to avoid in the image (max 500 chars) |
-| `size` | string | Resolution — `1280*1280` (t2i default), `1K`/`2K` or `width*height` (wan2.6-image) |
+| `size` | string | Resolution; supported values and defaults are model-specific, so read the model catalog above |
 | `seed` | int | Random seed for reproducibility [0, 2147483647] |
-| `model` | string | `wan2.7-image` (default) or other Wan model |
+| `model` | string | Model ID; check the model catalog above for the current default and supported models |
 | `prompt_extend` | bool | Enable prompt rewriting (default: true; image editing mode only) |
 
 ### Request Fields (wan2.7-image-pro / wan2.7-image — Multi-function)
@@ -272,15 +197,11 @@ If the script fails, match the error output against the diagnostic table below t
 | `max_images` | int | Max images in interleave mode (1–5, default: 5). **Billed per image.** |
 | `watermark` | bool | Add "AI Generated" watermark (default: false) |
 
-### Other Models (wan2.5-i2i, qwen-image-edit, qwen-image-plus/max)
+### Other Models
 
-These models have specific parameter requirements:
+Use the model catalog linked above for the current model list and model-specific compatibility differences.
 
-| Model | Key Differences |
-|-------|----------------|
-| `wan2.5-i2i-preview` | async-only, 1–3 images, `prompt+images[]` format (not messages) |
-| `qwen-image-edit-*` | 1–3 images, n=1–6 (except `qwen-image-edit`: n=1 only), no interleave |
-| `qwen-image-plus/max` | async-only, **n fixed at 1**, 5 fixed resolutions only |
+For fixed-resolution asynchronous text-to-image models whose catalog entry allows multiple outputs, the bundled script currently clamps `n` to 1. Use the direct API flow in [api-guide.md](references/api-guide.md#text-to-image-models--endpoint--parameters) when multiple outputs are required in one request.
 
 **Full parameter tables**: See [api-guide.md](references/api-guide.md#wan25-i2i-preview--general-image-editing) for detailed parameters.
 
@@ -314,7 +235,7 @@ These models have specific parameter requirements:
 - **wan2.6-image resolution**: Editing mode [768x768, 2048x2048]; Interleave mode [768x768, 1280x1280]; aspect ratio [1:4, 4:1]
 - **Input images** (wan2.6-image): JPEG/JPG/PNG/BMP/WEBP, 240–8000px per dimension, ≤10MB
 - **Local files**: Script auto-uploads to DashScope temp storage (`oss://` URL, 48h TTL). Pass local paths directly — no manual upload step needed.
-- **Production**: Default temp storage has **48h TTL** and **100 QPS upload limit** — not suitable for production, high-concurrency, or load-testing. To use your own OSS bucket, set `QWEN_TMP_OSS_BUCKET` and `QWEN_TMP_OSS_REGION` in `.env`, install `pip install oss2`, and provide credentials via `QWEN_TMP_OSS_AK_ID` / `QWEN_TMP_OSS_AK_SECRET` or the standard `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`. Use a RAM user with least-privilege (`oss:PutObject` + `oss:GetObject` on target bucket only). If qianwen-ops-auth is installed, see its `references/custom-oss.md` for the full setup guide.
+- **Production**: Default temp storage has **48h TTL** and **100 QPS upload limit** — not suitable for production, high-concurrency, or load-testing. To use your own OSS bucket, set `QWEN_TMP_OSS_BUCKET` and `QWEN_TMP_OSS_REGION` in `.env`, install `pip install alibabacloud-oss-v2`, and provide credentials via `QWEN_TMP_OSS_AK_ID` / `QWEN_TMP_OSS_AK_SECRET` or the standard `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`. Use a RAM user with least-privilege (`oss:PutObject` + `oss:GetObject` on target bucket only). If qianwen-ops-auth is installed, see its `references/custom-oss.md` for the full setup guide.
 - **Interleaved sync**: Requires streaming (`X-DashScope-Sse: enable` + `stream: true`); use async mode via this script instead
 
 ## Cross-Skill Chaining

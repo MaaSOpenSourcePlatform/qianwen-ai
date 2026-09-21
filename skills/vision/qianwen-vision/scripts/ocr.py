@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""OCR text extraction with qwen3.5-ocr (default) / qwen-vl-ocr.
+"""OCR text extraction with dynamically configured Qwen vision models.
 
 Optimized for dense text: scanned documents, receipts, tickets, tables, formulas.
 Supports pixel-level control (min_pixels/max_pixels) for resolution vs cost trade-off.
@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from vision_lib import (  # noqa: E402
     chat_url,
     extract_text,
+    get_default_model,
     http_post,
     load_request,
     prompt_update_check_install,
@@ -33,7 +34,6 @@ from vision_lib import (  # noqa: E402
     validate_token_plan_model,
 )
 
-DEFAULT_MODEL = "qwen3.5-ocr"
 DEFAULT_PROMPT = "Please output only the text content from the image without any additional descriptions or formatting."
 DEFAULT_MAX_TOKENS = 4096
 
@@ -43,7 +43,7 @@ def ocr(req: dict[str, Any], api_key: str, *, upload_files: bool = False) -> dic
     if not image:
         raise ValueError("image is required")
 
-    model = req.get("model", DEFAULT_MODEL)
+    model = req["model"] if "model" in req else get_default_model("ocr")
     prompt = req.get("prompt", DEFAULT_PROMPT)
     json_mode = bool(req.get("json_mode", False))
 
@@ -99,14 +99,19 @@ def ocr(req: dict[str, Any], api_key: str, *, upload_files: bool = False) -> dic
 
 def main() -> None:
     prompt_update_check_install()
+    help_default_model = (
+        get_default_model("ocr")
+        if any(arg in ("-h", "--help") for arg in sys.argv[1:])
+        else "loaded from CDN/fallback configuration"
+    )
     parser = argparse.ArgumentParser(
-        description="OCR text extraction with qwen3.5-ocr",
+        description="OCR text extraction with Qwen vision models",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 request JSON fields (--request / --file):
   image             (required) Image URL or local path
   prompt            Extraction instruction (default: extract all text)
-  model             Model ID (default: qwen3.5-ocr; also supports qwen-vl-ocr)
+  model             Model ID (default: {help_default_model}; dedicated alternatives: qwen3.5-ocr, qwen-vl-ocr)
   json_mode         true — output as structured JSON (also via --json-mode)
   min_pixels        Minimum image pixels (increase for fine text)
   max_pixels        Maximum image pixels (decrease to reduce cost)
@@ -136,12 +141,12 @@ examples:
 
   # JSON-structured output
   python scripts/ocr.py --request '{"image":"invoice.jpg"}' --json-mode --print-response
-""",
+""".replace("{help_default_model}", help_default_model),
     )
     parser.add_argument("--request", help="Inline JSON: must contain 'image'")
     parser.add_argument("--file", help="Path to JSON request file")
     parser.add_argument("--model", type=str, default=None,
-                        help="Model ID (default: %s)" % DEFAULT_MODEL)
+                        help=f"Model ID (default: {help_default_model})")
     parser.add_argument("--json-mode", action="store_true", help="Request JSON-only output")
     parser.add_argument("--upload-files", action="store_true",
                         help="Upload local files to temp storage (oss://) instead of base64")
@@ -160,7 +165,7 @@ examples:
     if args.model:
         req["model"] = args.model
     elif "model" not in req or not req.get("model"):
-        req["model"] = DEFAULT_MODEL
+        req["model"] = get_default_model("ocr")
 
     validate_token_plan_model(api_key, req["model"])
 

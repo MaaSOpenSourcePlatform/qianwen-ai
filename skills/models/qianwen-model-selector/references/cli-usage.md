@@ -1,8 +1,8 @@
 # CLI Usage Guide — qianwen-model-selector
 
-The QianWen CLI is the **authoritative, real-time** data source for this skill. Static reference files
-(`model-list.md`, `pricing.md`) are point-in-time snapshots and may be outdated. **Always prefer CLI** for
-queries about current state.
+The QianWen CLI is the **authoritative, real-time** data source for this skill. The CDN model and
+pricing catalogs linked by the local references are point-in-time snapshots and may be outdated. **Always prefer CLI** for
+queries about current state; fetch the documented CDN catalogs for fallback model data.
 
 ## Authentication Model — IMPORTANT
 
@@ -26,7 +26,7 @@ You **MUST** use CLI (not snapshots) for the following question types:
 |---------------|---------------------|
 | "What's the latest / current ..." | Snapshots are stale by definition |
 | "What's the exact price of `<model>`?" | Pricing tiers change; snapshot has only structural overview |
-| "Show me details of `<model-id>`" | Need authoritative context window, rate limits, features |
+| "Show me current/full details of `<model-id>`" | Need authoritative context window, rate limits, features |
 | "Is `<model>` available?" | Availability changes frequently |
 | "Search for a model that does X" | Snapshot keyword coverage is incomplete |
 | "How much free quota do I have left?" | User-specific; not in any snapshot |
@@ -34,9 +34,10 @@ You **MUST** use CLI (not snapshots) for the following question types:
 
 ## When snapshots are acceptable
 
-- **General navigation**: "Which family of models should I use for text chat?" → SKILL.md `Default` table is enough.
-- **Capability comparison overview**: "What's the difference between flash/turbo/plus tiers?" → `recommendation-matrix.md`.
-- **Billing unit reference**: "Is image generation billed per image or per token?" → `pricing.md` structural overview.
+- **General navigation**: "Which family of models should I use for text chat?" → fetch the CDN recommendations catalog.
+- **Point-in-time basic model information**: capabilities and documented limits that are present in a CDN domain catalog, with a snapshot caveat when currentness matters.
+- **Capability comparison overview**: "What's the difference between flash/turbo/plus tiers?" → fetch the CDN catalog mirrored by [qianwen-model-recommendations.md](../cdn/references/qianwen-model-recommendations.md).
+- **Billing unit reference**: "Is image generation billed per image or per token?" → CDN pricing reference linked by `pricing.md`.
 - **CLI completely unavailable** AND user declines to install/login → fall back to snapshots with an explicit caveat.
 
 ## Core CLI commands
@@ -111,7 +112,7 @@ This polls until a `success` event arrives, the user cancels, or the polling tim
 **MANDATORY**: After successful authentication, re-run the exact CLI command that originally failed.
 Do **not** stop at "login succeeded" — the user's original question is still unanswered.
 
-> If the user explicitly declines to log in, only then fall back to `model-list.md` / `pricing.md`,
+> If the user explicitly declines to log in, only then fall back to [qianwen-model-list.md](../cdn/references/qianwen-model-list.md) / [pricing.md](pricing.md),
 > with an explicit caveat that data may be outdated.
 
 For the full authentication flow, including headless / CI environments, see the
@@ -149,15 +150,17 @@ For users who want to learn more about a specific model (capabilities, specs, be
 
 ## Decision: CLI vs snapshot vs web
 
-Use this resolution order. Stop at the first source that answers the question.
+Choose the source by question type, then stop at the first source that can answer it.
 
-1. **CLI** — `qianwen models list/info/search/usage` (real-time, structured)
-2. **CLI auth recovery** — if step 1 returns `Not authenticated` / `AUTH_REQUIRED`, run the 3-step
+1. **General navigation or point-in-time basic details** — fetch the relevant CDN model catalog; use its local fallback if CDN access fails.
+2. **Current availability, exact current pricing, account quota, or capability search** — use `qianwen models list/info/search` or `qianwen usage` (real-time, structured).
+3. **CLI auth recovery** — if step 2 returns `Not authenticated` / `AUTH_REQUIRED`, run the 3-step
    device-flow login above, then **retry the original command**. Do **not** ask the user for an API key
    (see [Authentication Model](#authentication-model--important)).
-3. **CLI error recovery** — if step 1 returns other errors, see [error-handling.md](error-handling.md)
-4. **Static snapshots** — `model-list.md`, `pricing.md` (only when CLI is unavailable or user declines login)
-5. **Web lookup** — official URLs from [sources.md](sources.md) (only when 1–4 cannot answer AND user confirms)
+4. **Other CLI error recovery** — if step 2 returns another error, see [error-handling.md](error-handling.md).
+5. **Snapshot fallback for a CLI-required question** — only when CLI is unavailable or the user declines login; answer only catalog-supported facts, explicitly label them as point-in-time, and do not claim current availability, exact current price, or account quota.
+6. **Web lookup** — official URLs from [sources.md](sources.md) (only when the sources above cannot answer AND the user confirms).
 
-**Do NOT proactively fetch URLs.** Only access web sources when CLI + snapshots both fail AND the user
-confirms an online lookup.
+Fetch the documented CDN model catalogs when fallback model data is needed. **Do NOT proactively fetch
+other URLs.** Access other web sources only when CLI + snapshots both fail AND the user confirms an
+online lookup.

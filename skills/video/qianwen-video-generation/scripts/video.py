@@ -40,17 +40,17 @@ from qianwen_lib import (  # noqa: E402
     validate_token_plan_model,
 )
 from video_lib import (  # noqa: E402
-    DEFAULT_MODELS,
     ENDPOINTS,
     MODE_I2V,
     MODE_KF2V,
     MODE_VIDEO_EDIT,
     PAYLOAD_BUILDERS,
     RESOLVE_KEYS,
-    _HAPPYHORSE_I2V_MODELS,
-    _VIDEO_EDIT_MODELS,
-    _WAN27_I2V_MODELS,
     detect_mode,
+    get_default_model,
+    is_happyhorse_i2v_model,
+    is_video_edit_model,
+    is_wan27_i2v_model,
     resolve_request_urls,
     extract_video_url,
     estimate_cost,
@@ -137,16 +137,29 @@ def _handle_result(result: dict[str, Any], args: argparse.Namespace,
 
 def main() -> None:
     run_update_signal(caller=__file__)
+    help_default_models: dict[str, str] = {}
+    if any(arg in ("-h", "--help") for arg in sys.argv[1:]):
+        help_default_models = {
+            mode: get_default_model(mode)
+            for mode in ("t2v", "i2v", "kf2v", "r2v", "vace", "videoedit")
+        }
+
+    def help_default_suffix(mode: str) -> str:
+        model = help_default_models.get(mode)
+        return f" (default: {model})" if model else ""
+
     parser = argparse.ArgumentParser(
-        description="Generate video via Wan models (t2v/i2v/kf2v/r2v/vace)",
+        description="Generate video via Wan and HappyHorse models (t2v/i2v/kf2v/r2v/vace)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\
-mode auto-detection (from request JSON fields):
-  t2v   prompt only → text-to-video (default: wan2.6-t2v, or wan2.7-t2v)
-  i2v   img_url/media/first_frame_url → image-to-video (default: wan2.6-i2v-flash, or wan2.7-i2v)
-  kf2v  first_frame_url (without media) → keyframe-to-video (default: wan2.2-kf2v-flash)
-  r2v   reference_urls → reference role-play (default: wan2.6-r2v-flash)
-  vace  function → video editing/repaint/extend (default: wanx2.1-vace-plus)
+        epilog=(
+            "mode auto-detection (from request JSON fields):\n"
+            f"  t2v   prompt only → text-to-video{help_default_suffix('t2v')}\n"
+            f"  i2v   img_url/media/first_frame_url → image-to-video{help_default_suffix('i2v')}\n"
+            f"  kf2v  first_frame_url (without media) → keyframe-to-video{help_default_suffix('kf2v')}\n"
+            f"  r2v   reference_urls → reference role-play{help_default_suffix('r2v')}\n"
+            f"  vace  function → video editing/repaint/extend{help_default_suffix('vace')}\n"
+            f"  videoedit  video-edit model → video editing{help_default_suffix('videoedit')}\n"
+            """
 
 model version differences (handled automatically):
   wan2.6-t2v / wan2.7-t2v / happyhorse-1.0-t2v:
@@ -196,7 +209,7 @@ environment variables:
   QWEN_REGION        cn-beijing (default)
 
 examples:
-  # Text-to-video (wan2.6)
+  # Text-to-video with the configured default model
   python scripts/video.py --request '{"prompt":"A cat playing piano","duration":5}'
 
   # Text-to-video with wan2.7 (ratio, auto-dubbing)
@@ -227,7 +240,7 @@ examples:
     "video_url":"input.mp4","reference_images":["robot.png"],
     "resolution":"1080P","ratio":"16:9"}' --model wan2.7-videoedit
 
-""",
+"""),
     )
     parser.add_argument("--request", type=str, help="Inline JSON: fields depend on mode")
     parser.add_argument("--file", type=Path, help="Path to JSON file containing request body")
@@ -304,15 +317,15 @@ examples:
     if args.model:
         request["model"] = args.model
     mode = args.mode or detect_mode(request)
-    model = args.model or request.get("model") or DEFAULT_MODELS[mode]
+    model = args.model or request.get("model") or get_default_model(mode)
     # Model-aware correction: wan2.7-i2v / happyhorse-i2v use first_frame_url
     # but belong to i2v mode (detect_mode would have classified them as kf2v).
     # (detect_mode has no wan2.7-i2v branch, so this correction is still required.)
-    if model in _WAN27_I2V_MODELS or model in _HAPPYHORSE_I2V_MODELS:
+    if is_wan27_i2v_model(model) or is_happyhorse_i2v_model(model):
         if mode == MODE_KF2V:
             mode = MODE_I2V
     # Video-edit models: correct t2v fallback when --model specifies a video-edit model
-    if model in _VIDEO_EDIT_MODELS and mode != MODE_VIDEO_EDIT:
+    if is_video_edit_model(model) and mode != MODE_VIDEO_EDIT:
         mode = MODE_VIDEO_EDIT
     duration = request.get("duration", 5)
     resolution = resolve_resolution(request, mode)

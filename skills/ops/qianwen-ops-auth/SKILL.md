@@ -15,7 +15,7 @@ Use this skill's internal files for learning. Load references only when the user
 
 | Location | Purpose |
 |----------|---------|
-| `references/tokenplan.md` | Token Plan vs standard key: supported models (text, image, video, TTS), Credits billing, forbidden uses, error codes |
+| `references/tokenplan.md` | Token Plan vs standard key; points to the CDN catalog for supported models and retains Credits, policy, and error guidance |
 | `references/custom-oss.md` | Custom OSS bucket setup for production file uploads (replaces 48h temp storage) |
 | `references/sources.md` | Console URLs, auth guide (manual lookup only) |
 
@@ -63,8 +63,7 @@ QianWen has two mutually exclusive key types:
 | **Token Plan** | `sk-sp-xxxxx` | Interactive AI tools and the Skill/Agent extensions they invoke for the current user |
 
 The bundled execution Skills accept both key types and route `sk-sp-` requests to the Token Plan
-endpoint. Before a Token Plan request, read [tokenplan.md](references/tokenplan.md) or its linked
-official Markdown and pass an exact supported model. Do not probe models or automatically fall back.
+endpoint. Before a Token Plan request, fetch and read the current [Token Plan model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-token-plan-models.md) and pass an exact supported model. Do not probe models or automatically fall back. If CDN access fails, use the [local fallback](cdn/references/qianwen-token-plan-models.md).
 
 ### Detecting Key Type (non-plaintext)
 
@@ -224,6 +223,6 @@ After the user responds:
 
 ## References
 
-- [tokenplan.md](references/tokenplan.md) — Token Plan vs standard key: supported models, Credits billing, forbidden uses, error codes
+- [tokenplan.md](references/tokenplan.md) — Token Plan vs standard key; CDN model-catalog pointer, Credits billing, forbidden uses, error codes
 - [custom-oss.md](references/custom-oss.md) — Custom OSS bucket setup for production file uploads
 - [sources.md](references/sources.md) — Official documentation URLs (consoles, auth guide)

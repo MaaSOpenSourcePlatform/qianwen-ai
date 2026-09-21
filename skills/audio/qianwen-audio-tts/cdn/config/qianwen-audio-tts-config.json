@@ -1,0 +1,27 @@
+{
+  "tts": {
+    "default_model": "qwen-audio-3.0-tts-plus",
+    "nrt_default_voices": {
+      "qwen-audio-3.0-tts-plus": "longanlingxin",
+      "qwen-audio-3.0-tts-flash": "longanhuan_v3.6"
+    }
+  },
+  "cosyvoice": {
+    "default_model": "cosyvoice-v3-flash",
+    "custom_voice_only_models": [
+      "cosyvoice-v3.5-flash",
+      "cosyvoice-v3.5-plus"
+    ],
+    "nrt_models": [
+      "cosyvoice-v3.5-flash",
+      "cosyvoice-v3.5-plus",
+      "cosyvoice-v3-flash",
+      "cosyvoice-v3-plus"
+    ],
+    "instruction_models": [
+      "cosyvoice-v3.5-flash",
+      "cosyvoice-v3.5-plus",
+      "cosyvoice-v3-flash"
+    ]
+  }
+}

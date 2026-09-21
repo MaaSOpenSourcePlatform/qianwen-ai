@@ -1,0 +1,41 @@
+{
+  "default_models": {
+    "t2v": "happyhorse-1.1-t2v",
+    "i2v": "happyhorse-1.1-i2v",
+    "kf2v": "wan2.2-kf2v-flash",
+    "r2v": "happyhorse-1.1-r2v",
+    "vace": "wanx2.1-vace-plus",
+    "videoedit": "happyhorse-1.0-video-edit"
+  },
+  "wan27_t2v_models": [
+    "wan2.7-t2v",
+    "wan2.7-t2v-2026-06-12",
+    "wan2.7-t2v-2026-04-25",
+    "happyhorse-1.0-t2v",
+    "happyhorse-1.1-t2v"
+  ],
+  "wan27_i2v_models": [
+    "wan2.7-i2v",
+    "wan2.7-i2v-2026-04-25"
+  ],
+  "happyhorse_i2v_models": [
+    "happyhorse-1.0-i2v",
+    "happyhorse-1.1-i2v"
+  ],
+  "happyhorse_r2v_models": [
+    "happyhorse-1.0-r2v",
+    "happyhorse-1.1-r2v"
+  ],
+  "wan27_r2v_models": [
+    "wan2.7-r2v",
+    "wan2.7-r2v-2026-06-12"
+  ],
+  "wan30_video_models": [
+    "wan3.0-video",
+    "wan3.0-video-prime"
+  ],
+  "video_edit_models": [
+    "happyhorse-1.0-video-edit",
+    "wan2.7-videoedit"
+  ]
+}

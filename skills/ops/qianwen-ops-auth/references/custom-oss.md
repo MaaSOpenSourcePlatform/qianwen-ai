@@ -12,7 +12,7 @@ By default, local files are uploaded to DashScope temporary storage (`oss://` UR
 Install the 阿里云 OSS SDK (Python):
 
 ```bash
-pip install oss2
+pip install alibabacloud-oss-v2
 ```
 
 You need an existing OSS bucket. Create one in the [OSS Console](https://oss.console.aliyun.com/) if you don't have one.
@@ -82,7 +82,7 @@ Files are stored under `{prefix}/{date}/{uuid}_{filename}` and remain in your bu
 | URL format | `oss://` | `https://` (presigned) |
 | File TTL | 48 hours (auto-deleted) | Permanent (user-managed) |
 | Upload rate limit | 100 QPS (not expandable) | OSS limits (much higher) |
-| Dependency | None (stdlib only) | `oss2` |
+| Dependency | None (stdlib only) | `alibabacloud-oss-v2` |
 | Setup | Zero config | Bucket + env vars |
 | Production ready | No | Yes |
 

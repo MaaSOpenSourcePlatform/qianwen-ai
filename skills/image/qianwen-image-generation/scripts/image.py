@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate or edit images using Wan and Qwen Image models via DashScope API.
 
-Supports wan2.7 sync mode (default) and async mode for older models.
+Supports configuration-driven defaults plus sync and async generation modes.
 wan2.6-image supports image editing (multi-image input) and interleaved
 text-image output. Qwen Image series supports text rendering, image editing,
 and text-to-image with fixed resolutions.
@@ -17,7 +17,9 @@ if sys.version_info < (3, 9):
     sys.exit(1)
 
 import argparse
+import http.client
 import json
+import re
 from pathlib import Path
 from urllib.parse import urlparse
 from typing import Any
@@ -32,14 +34,16 @@ from qianwen_lib import (  # noqa: E402
     poll_task,
     require_api_key,
     run_update_signal,
+    sanitize_diagnostic,
     validate_token_plan_model,
 )
 from image_lib import (  # noqa: E402
-    DEFAULT_MODEL,
     SYNC_PATH,
     ASYNC_PATH,
     I2I_ASYNC_PATH,
     T2I_ASYNC_PATH,
+    default_model,
+    i2i_default_model,
     is_image_edit_model,
     is_i2i_model,
     is_qwen_image_edit_model,
@@ -58,8 +62,31 @@ from image_lib import (  # noqa: E402
 # Generation calls (sync / async)
 # ---------------------------------------------------------------------------
 
+_DOWNLOAD_ERRORS = (OSError, RuntimeError, ValueError, http.client.HTTPException)
+_QUERY_OR_FRAGMENT = re.compile(r"([?#])[^\s<>\"']+")
+
+
+def _download_image(
+        url: str,
+        destination: Path,
+        index: int,
+        total: int,
+        failures: list[dict[str, Any]],
+) -> bool:
+    """Download one image and record a sanitized failure for the caller."""
+    try:
+        download_file(url, destination)
+    except _DOWNLOAD_ERRORS as exc:
+        error = sanitize_diagnostic(str(exc))
+        error = _QUERY_OR_FRAGMENT.sub(r"\1[REDACTED]", error)
+        failures.append({"index": index, "error": error})
+        print(f"Failed to download image {index}/{total}: {error}", file=sys.stderr)
+        return False
+    return True
+
+
 def _call_generate_sync(req: dict[str, Any], api_key: str) -> dict[str, Any]:
-    model = req.get("model", DEFAULT_MODEL)
+    model = req["model"] if "model" in req else default_model()
     url = f"{native_base_url().rstrip('/')}{SYNC_PATH}"
     payload = build_payload(req, model, api_key)
     model = req.get("model", model)
@@ -93,7 +120,7 @@ def _call_generate_sync(req: dict[str, Any], api_key: str) -> dict[str, Any]:
 
 
 def _call_generate_async(req: dict[str, Any], api_key: str) -> dict[str, Any]:
-    model = req.get("model", DEFAULT_MODEL)
+    model = req["model"] if "model" in req else default_model()
     url = f"{native_base_url().rstrip('/')}{ASYNC_PATH}"
     payload = build_payload(req, model, api_key)
     model = req.get("model", model)
@@ -149,7 +176,7 @@ def _call_generate_async(req: dict[str, Any], api_key: str) -> dict[str, Any]:
 
 
 def _call_i2i_async(req: dict[str, Any], api_key: str) -> dict[str, Any]:
-    model = req.get("model", "wan2.5-i2i-preview")
+    model = req["model"] if "model" in req else i2i_default_model()
     url = f"{native_base_url().rstrip('/')}{I2I_ASYNC_PATH}"
     payload = build_i2i_payload(req, model, api_key)
 
@@ -184,7 +211,12 @@ def _call_i2i_async(req: dict[str, Any], api_key: str) -> dict[str, Any]:
 
 
 def _call_t2i_async(req: dict[str, Any], api_key: str) -> dict[str, Any]:
-    model = req.get("model", "qwen-image-plus")
+    model = req.get("model")
+    if not model:
+        raise ValueError(
+            "Legacy text-to-image requires an explicit model; use the general "
+            "image generation route for the current default."
+        )
     url = f"{native_base_url().rstrip('/')}{T2I_ASYNC_PATH}"
     payload = build_t2i_payload(req, model)
 
@@ -224,10 +256,10 @@ def _call_t2i_async(req: dict[str, Any], api_key: str) -> dict[str, Any]:
 
 def main() -> None:
     run_update_signal(caller=__file__)
-    parser = argparse.ArgumentParser(
-        description="Generate or edit images with Wan and Qwen Image models",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\
+    help_requested = any(arg in {"-h", "--help"} for arg in sys.argv[1:])
+    help_default_model = default_model() if help_requested else None
+    help_default_model_text = help_default_model or "loaded at runtime"
+    help_epilog = """\
 request JSON fields (--request / --file):
   prompt              (required) Text description of the desired image
   reference_images    Array of image URLs/paths for editing (wan2.6-image, wan2.5-i2i,
@@ -242,8 +274,11 @@ request JSON fields (--request / --file):
   prompt_extend       true/false — auto-enhance prompt (default: true)
   watermark           true/false — add watermark (default: false)
 
+default model (loaded from CDN/fallback config):
+  __CONFIGURED_DEFAULT_MODEL__
+
 models (Wan series):
-  wan2.7-image        (default) Multi-function — text-to-image, image editing, interleaved output
+  wan2.7-image        Multi-function — text-to-image, image editing, interleaved output
   wan2.7-image-pro    Multi-function (higher quality) — text-to-image, image editing,
                       multi-image composition, interleaved output
   wan2.6-t2i          Text-to-image ONLY — dedicated t2i model, sync + async
@@ -280,7 +315,7 @@ environment variables:
   QWEN_REGION         cn-beijing (default)
 
 examples:
-  # Text-to-image (Wan, default)
+  # Text-to-image (configured default: __CONFIGURED_DEFAULT_MODEL__)
   python scripts/image.py --request '{"prompt":"a cat sitting on a windowsill"}'
 
   # Text-to-image with wan2.7-image-pro (4K, thinking mode)
@@ -319,12 +354,17 @@ examples:
   # Multi-image fusion with wan2.5-i2i-preview
   python scripts/image.py --request '{"prompt":"Place the cat on the sofa",
     "reference_images":["cat.jpg","sofa.jpg"]}' --model wan2.5-i2i-preview
-""",
+""".replace("__CONFIGURED_DEFAULT_MODEL__", help_default_model_text)
+    parser = argparse.ArgumentParser(
+        description="Generate or edit images with Wan and Qwen Image models",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=help_epilog,
     )
     parser.add_argument("--request", help="Inline JSON: must contain 'prompt'")
     parser.add_argument("--file", help="Path to JSON file containing request body")
     parser.add_argument("--model", default=None,
-                        help="Model name (overrides value in request file; default: wan2.7-image)")
+                        help=("Model name (overrides value in request file; "
+                              f"default: {help_default_model_text}, loaded from CDN/fallback config)"))
     parser.add_argument(
         "--async", dest="async_mode", action="store_true",
         help="Use async mode (auto-enabled for wan2.5-i2i, qwen-image-plus/max, and interleaved output)",
@@ -337,78 +377,70 @@ examples:
     parser.add_argument("--print-response", action="store_true", help="Print result JSON to stdout")
     args = parser.parse_args()
 
-    api_key = require_api_key(script_file=__file__, domain="Image")
-    req = load_request(args)
+    try:
+        api_key = require_api_key(script_file=__file__, domain="Image")
+        req = load_request(args)
 
-    if args.model:
-        req["model"] = args.model
-    elif "model" not in req:
-        req["model"] = DEFAULT_MODEL
+        if args.model:
+            req["model"] = args.model
+        elif "model" not in req:
+            req["model"] = help_default_model or default_model()
 
-    model = req["model"]
-    validate_token_plan_model(api_key, model)
-    is_edit = is_image_edit_model(model)
-    is_i2i = is_i2i_model(model)
-    is_qwen_t2i = is_qwen_t2i_model(model)
-    is_z_image = is_z_image_model(model)
-    enable_interleave = req.get("enable_interleave", False)
+        model = req["model"]
+        validate_token_plan_model(api_key, model)
+        is_edit = is_image_edit_model(model)
+        is_i2i = is_i2i_model(model)
+        is_qwen_t2i = is_qwen_t2i_model(model)
+        is_z_image = is_z_image_model(model)
+        enable_interleave = req.get("enable_interleave", False)
 
-    if is_z_image and args.async_mode:
-        print(f"{model} is sync-only. Disabling --async.", file=sys.stderr)
-        args.async_mode = False
+        if is_z_image and args.async_mode:
+            print(f"{model} is sync-only. Disabling --async.", file=sys.stderr)
+            args.async_mode = False
 
-    if is_i2i and not args.async_mode:
-        print("wan2.5-i2i-preview is async-only. Enabling --async automatically.", file=sys.stderr)
-        args.async_mode = True
+        if is_i2i and not args.async_mode:
+            print("wan2.5-i2i-preview is async-only. Enabling --async automatically.", file=sys.stderr)
+            args.async_mode = True
 
-    if is_qwen_t2i and not args.async_mode:
-        print(f"{model} uses async text2image API. Enabling --async automatically.", file=sys.stderr)
-        args.async_mode = True
+        if is_qwen_t2i and not args.async_mode:
+            print(f"{model} uses async text2image API. Enabling --async automatically.", file=sys.stderr)
+            args.async_mode = True
 
-    if is_edit and enable_interleave and not args.async_mode:
-        print("Interleaved text-image mode requires --async. Enabling automatically.", file=sys.stderr)
-        args.async_mode = True
+        if is_edit and enable_interleave and not args.async_mode:
+            print("Interleaved text-image mode requires --async. Enabling automatically.", file=sys.stderr)
+            args.async_mode = True
 
-    if is_qwen_image_edit_model(model) and enable_interleave:
-        print(f"Error: {model} does not support enable_interleave. "
-              "Use wan2.6-image for interleaved text-image output.", file=sys.stderr)
-        sys.exit(1)
+        if is_qwen_image_edit_model(model) and enable_interleave:
+            print(f"Error: {model} does not support enable_interleave. "
+                  "Use wan2.6-image for interleaved text-image output.", file=sys.stderr)
+            sys.exit(1)
 
-    if is_i2i:
-        try:
+        if is_i2i:
             result = _call_i2i_async(req, api_key)
-        except RuntimeError as e:
-            print(f"Error: {e}", file=sys.stderr)
-            sys.exit(1)
-    elif is_qwen_t2i:
-        try:
+        elif is_qwen_t2i:
             result = _call_t2i_async(req, api_key)
-        except RuntimeError as e:
-            print(f"Error: {e}", file=sys.stderr)
-            sys.exit(1)
-    elif args.async_mode:
-        try:
+        elif args.async_mode:
             result = _call_generate_async(req, api_key)
-        except RuntimeError as e:
-            print(f"Error: {e}", file=sys.stderr)
-            sys.exit(1)
-    else:
-        try:
+        else:
             result = _call_generate_sync(req, api_key)
-        except RuntimeError as e:
-            print(f"Error: {e}", file=sys.stderr)
-            sys.exit(1)
+    except (ValueError, RuntimeError, OSError) as exc:
+        print(sanitize_diagnostic(f"Error: {exc}"), file=sys.stderr)
+        sys.exit(1)
 
     output_path = Path(args.output)
     image_urls = result.get("image_urls") or ([result["image_url"]] if result.get("image_url") else [])
+
+    download_failures: list[dict[str, Any]] = []
 
     if len(image_urls) == 1:
         if output_path.is_dir() or output_path.suffix == "":
             output_path.mkdir(parents=True, exist_ok=True)
             url_filename = Path(urlparse(image_urls[0]).path).name or "output.png"
             output_path = output_path / url_filename
-        download_file(image_urls[0], output_path)
-        result["local_path"] = str(output_path)
+        if _download_image(image_urls[0], output_path, 1, 1, download_failures):
+            result["local_path"] = str(output_path)
+        else:
+            result["download_failures"] = download_failures
     elif len(image_urls) > 1:
         local_paths: list[str] = []
         if output_path.suffix != "":
@@ -419,7 +451,10 @@ examples:
             suffix = output_path.suffix
             for i, url in enumerate(image_urls):
                 dest = out_dir / f"{stem}-{i + 1}{suffix}"
-                download_file(url, dest)
+                if not _download_image(
+                        url, dest, i + 1, len(image_urls), download_failures
+                ):
+                    continue
                 local_paths.append(str(dest))
         else:
             # output is a directory: keep existing behavior (mkdir + URL basename)
@@ -431,33 +466,52 @@ examples:
                     dest = out_dir / url_basename
                 else:
                     dest = out_dir / f"output_{i + 1}.png"
-                download_file(url, dest)
+                if not _download_image(
+                        url, dest, i + 1, len(image_urls), download_failures
+                ):
+                    continue
                 local_paths.append(str(dest))
         print(f"Saved {len(local_paths)} images: {', '.join(local_paths)}", file=sys.stderr)
         result["local_paths"] = local_paths
-        result["local_path"] = local_paths[0]
+        if local_paths:
+            result["local_path"] = local_paths[0]
+        if download_failures:
+            result["download_failures"] = download_failures
 
     if result.get("interleaved_content"):
         out_dir = output_path if output_path.suffix == "" else output_path.parent
         out_dir.mkdir(parents=True, exist_ok=True)
         md_path = out_dir / "interleaved_output.md"
         md_lines: list[str] = []
+        failed_image_indexes = {failure["index"] for failure in download_failures}
         img_idx = 0
         for item in result["interleaved_content"]:
             if item["type"] == "text":
                 md_lines.append(item["text"])
             elif item["type"] == "image":
                 img_idx += 1
+                if img_idx in failed_image_indexes:
+                    md_lines.append(f"\n[Image {img_idx} download failed]\n")
+                    continue
                 img_url = item["image"]
                 img_basename = Path(urlparse(img_url).path).name
                 if not img_basename or "." not in img_basename:
                     img_basename = f"output_{img_idx}.png"
                 md_lines.append(f"\n![Image {img_idx}]({img_basename})\n")
-        md_path.write_text("\n".join(md_lines), encoding="utf-8")
-        print(f"Saved interleaved content: {md_path}", file=sys.stderr)
+        try:
+            md_path.write_text("\n".join(md_lines), encoding="utf-8")
+        except Exception as exc:
+            error = sanitize_diagnostic(str(exc))
+            result["interleaved_output_error"] = error
+            print(f"Failed to save interleaved content: {error}", file=sys.stderr)
+        else:
+            print(f"Saved interleaved content: {md_path}", file=sys.stderr)
 
     if args.print_response:
         print(json.dumps(result, ensure_ascii=False, indent=2))
+
+    if download_failures or "interleaved_output_error" in result:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

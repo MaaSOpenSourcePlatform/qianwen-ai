@@ -28,6 +28,7 @@ if sys.version_info < (3, 9):
     sys.exit(1)
 
 import base64
+import http.client
 import inspect
 import json
 import mimetypes
@@ -39,7 +40,12 @@ import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, BinaryIO, Generator, Iterator, Optional
+
+
+_MODEL_CONFIG_CDN_BASE = "https://alioth.alicdn.com/skills-info/models/config/"
+_MODEL_CONFIG_LOCAL_DIR = Path(__file__).resolve().parent.parent / "cdn" / "config"
+_MODEL_CONFIG_CACHE: dict[str, dict[str, Any]] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +98,54 @@ def load_env(script_file: str | Path | None = None) -> None:
             load_dotenv(repo / ".env")
 
 
+def load_cdn_model_config(
+    filename: str,
+    *,
+    required_keys: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    """Load a JSON model configuration from the CDN, then fall back locally."""
+    if Path(filename).name != filename or not filename.endswith(".json"):
+        raise ValueError(f"Invalid model configuration filename: {filename!r}")
+    url = urllib.parse.urljoin(_MODEL_CONFIG_CDN_BASE, filename)
+    local_path = _MODEL_CONFIG_LOCAL_DIR / filename
+    config = _MODEL_CONFIG_CACHE.get(filename)
+    if config is None:
+        request = urllib.request.Request(url, headers={"User-Agent": "qianwenai-skill"})
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                config = json.loads(response.read().decode("utf-8"))
+            if not isinstance(config, dict):
+                raise RuntimeError("expected a JSON object")
+            missing = [key for key in required_keys if key not in config]
+            if missing:
+                raise RuntimeError(f"missing {', '.join(missing)}")
+        except (
+            OSError,
+            TimeoutError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+            http.client.HTTPException,
+            RuntimeError,
+        ) as cdn_exc:
+            try:
+                config = json.loads(local_path.read_text(encoding="utf-8"))
+                if not isinstance(config, dict):
+                    raise RuntimeError("expected a JSON object")
+                missing = [key for key in required_keys if key not in config]
+                if missing:
+                    raise RuntimeError(f"missing {', '.join(missing)}")
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError, RuntimeError) as local_exc:
+                raise RuntimeError(
+                    f"Unable to load valid model configuration from {url} or {local_path}: "
+                    f"CDN error: {cdn_exc}; local error: {local_exc}"
+                ) from local_exc
+        _MODEL_CONFIG_CACHE[filename] = config
+    missing = [key for key in required_keys if key not in config]
+    if missing:
+        raise RuntimeError(f"Invalid cached model configuration: missing {', '.join(missing)}")
+    return config
+
+
 def mask_key(key: str) -> str:
     """Return a masked version of an API key for safe logging.
 
@@ -101,6 +155,31 @@ def mask_key(key: str) -> str:
     if len(key) <= 8:
         return "***"
     return f"{key[:4]}...{key[-4:]}"
+
+
+# Match both ordinary URLs and JSON-escaped slashes in SDK/API messages.
+_DIAGNOSTIC_URL = re.compile(r"https?:(?:\\*/){2}[^\s<>\"']+", re.IGNORECASE)
+
+
+def sanitize_diagnostic(text: str) -> str:
+    """Remove URL queries/fragments from diagnostics, never from API data.
+
+    Drop the entire query instead of maintaining a list of credential names:
+    OSS V1/V4 signatures and temporary security tokens must all stay private.
+    Call this before truncating an external error message.
+    """
+    def redact(match: re.Match) -> str:
+        url = match.group()
+        parts = re.split(r"([?#])", url, maxsplit=1)
+        if len(parts) == 1:
+            return url
+        if re.fullmatch(r"\[REDACTED\][.,;:!)\]}]*", parts[2]):
+            return url
+        # Preserve closing prose/Markdown delimiters outside the URL.
+        suffix = url[len(url.rstrip(".,;:!)]}")):]
+        return f"{parts[0]}{parts[1]}[REDACTED]{suffix}"
+
+    return _DIAGNOSTIC_URL.sub(redact, text)
 
 
 # ---------------------------------------------------------------------------
@@ -341,17 +420,26 @@ class DashScopeProvider(AIProvider):
             "key": key,
             "success_action_status": "200",
         }
-        body, ct = self._build_multipart(fields, fp.name, fp.read_bytes(), mime)
-        req = urllib.request.Request(
-            policy["upload_host"],
-            data=body,
-            method="POST",
-            headers={"Content-Type": ct},
-        )
         try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                if resp.status != 200:
-                    raise RuntimeError(f"OSS upload HTTP {resp.status}")
+            with fp.open("rb") as file_obj:
+                body, ct, content_length = self._build_multipart(
+                    fields, fp.name, file_obj, mime,
+                )
+                try:
+                    req = urllib.request.Request(
+                        policy["upload_host"],
+                        data=body,
+                        method="POST",
+                        headers={
+                            "Content-Type": ct,
+                            "Content-Length": str(content_length),
+                        },
+                    )
+                    with urllib.request.urlopen(req, timeout=120) as resp:
+                        if resp.status != 200:
+                            raise RuntimeError(f"OSS upload HTTP {resp.status}")
+                finally:
+                    body.close()
         except urllib.error.HTTPError as exc:
             detail = ""
             try:
@@ -364,27 +452,29 @@ class DashScopeProvider(AIProvider):
         return f"oss://{key}"
 
     def _upload_to_user_oss(self, fp: Path) -> str:
-        """Upload a file to the user's own OSS bucket via oss2.
+        """Upload a file to the user's own OSS bucket via alibabacloud-oss-v2.
 
         Returns a presigned ``https://`` URL.  Requires
         ``QWEN_TMP_OSS_BUCKET`` and ``QWEN_TMP_OSS_REGION``.
         Credentials are resolved from ``QWEN_TMP_OSS_AK_ID`` /
         ``QWEN_TMP_OSS_AK_SECRET`` first, falling back to
         ``OSS_ACCESS_KEY_ID`` / ``OSS_ACCESS_KEY_SECRET``
-        environment variables.
+        environment variables via the SDK's built-in provider.
         """
         try:
-            import oss2  # type: ignore[import-untyped]
+            import alibabacloud_oss_v2 as oss  # type: ignore[import-untyped]
         except ImportError:
             print(
-                "Error: oss2 is required for custom OSS upload.\n"
-                "Install: pip3 install oss2\n"
-                "Docs: https://help.aliyun.com/zh/oss/developer-reference/simple-upload-2",
+                "Error: alibabacloud-oss-v2 is required for custom OSS upload.\n"
+                "Install: pip3 install alibabacloud-oss-v2\n"
+                "Docs: https://www.alibabacloud.com/help/en/oss/developer-reference/"
+                "simple-upload-using-oss-sdk-for-python-v2",
                 file=sys.stderr,
             )
             sys.exit(1)
+        from datetime import timedelta
 
-        bucket_name = os.environ["QWEN_TMP_OSS_BUCKET"]
+        bucket = os.environ["QWEN_TMP_OSS_BUCKET"]
         region = os.getenv("QWEN_TMP_OSS_REGION", "")
         if not region:
             print(
@@ -394,19 +484,26 @@ class DashScopeProvider(AIProvider):
             )
             sys.exit(1)
 
-        ak_id = os.getenv("QWEN_TMP_OSS_AK_ID", "") or os.getenv("OSS_ACCESS_KEY_ID", "")
-        ak_secret = os.getenv("QWEN_TMP_OSS_AK_SECRET", "") or os.getenv("OSS_ACCESS_KEY_SECRET", "")
-        if not ak_id or not ak_secret:
-            print(
-                "Error: OSS credentials not found. Set QWEN_TMP_OSS_AK_ID/SECRET "
-                "or OSS_ACCESS_KEY_ID/SECRET.",
-                file=sys.stderr,
+        ak_id = os.getenv("QWEN_TMP_OSS_AK_ID", "")
+        ak_secret = os.getenv("QWEN_TMP_OSS_AK_SECRET", "")
+        if ak_id and ak_secret:
+            credentials_provider = oss.credentials.StaticCredentialsProvider(
+                ak_id, ak_secret,
             )
-            sys.exit(1)
+        else:
+            ak_id = os.getenv("OSS_ACCESS_KEY_ID", "")
+            ak_secret = os.getenv("OSS_ACCESS_KEY_SECRET", "")
+            credentials_provider = (
+                oss.credentials.EnvironmentVariableCredentialsProvider()
+            )
 
-        endpoint = os.getenv("QWEN_TMP_OSS_ENDPOINT", f"https://oss-{region}.aliyuncs.com")
-        auth = oss2.Auth(ak_id, ak_secret)
-        bucket_obj = oss2.Bucket(auth, endpoint, bucket_name)
+        cfg = oss.config.load_default()
+        cfg.credentials_provider = credentials_provider
+        cfg.region = region
+        endpoint = os.getenv("QWEN_TMP_OSS_ENDPOINT")
+        if endpoint:
+            cfg.endpoint = endpoint
+        client = oss.Client(cfg)
 
         prefix = os.getenv("QWEN_TMP_OSS_PREFIX", "qianwen-skill-uploads").strip("/")
         from datetime import datetime as _dt
@@ -415,17 +512,34 @@ class DashScopeProvider(AIProvider):
 
         mime = mimetypes.guess_type(fp.name)[0] or "application/octet-stream"
         try:
-            bucket_obj.put_object(key, fp.read_bytes(), headers={"Content-Type": mime})
+            uploader = oss.Uploader(
+                client,
+                part_size=8 * 1024 * 1024,
+                parallel_num=1,
+            )
+            uploader.upload_file(
+                oss.PutObjectRequest(
+                    bucket=bucket,
+                    key=key,
+                    content_type=mime,
+                ),
+                str(fp),
+            )
+
             expires_s = int(os.getenv("QWEN_TMP_OSS_URL_EXPIRES", "86400"))
-            url = bucket_obj.sign_url("GET", key, expires_s)
-            return url
+            presign_result = client.presign(
+                oss.GetObjectRequest(bucket=bucket, key=key),
+                expires=timedelta(seconds=expires_s),
+            )
+            return presign_result.url
         except Exception as exc:
-            msg = str(exc)
+            msg = sanitize_diagnostic(str(exc))
             if ak_id:
                 msg = msg.replace(ak_id, mask_key(ak_id))
             if ak_secret:
                 msg = msg.replace(ak_secret, mask_key(ak_secret))
-            raise RuntimeError(f"Custom OSS upload failed: {msg}") from exc
+            # The SDK exception may contain an unredacted signed URL too.
+            raise RuntimeError(f"Custom OSS upload failed: {msg}") from None
 
     def _get_upload_policy(self, api_key: str, model: str) -> dict[str, Any]:
         url = (
@@ -453,22 +567,42 @@ class DashScopeProvider(AIProvider):
     def _build_multipart(
             fields: dict[str, str],
             fname: str,
-            fbytes: bytes,
+            file_obj: BinaryIO,
             fmime: str,
-    ) -> tuple[bytes, str]:
+    ) -> tuple[Generator[bytes, None, None], str, int]:
+        """Build a streaming multipart body without buffering the file."""
         boundary = uuid.uuid4().hex
         parts: list[bytes] = []
         for k, v in fields.items():
             parts.append(
-                f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode()
+                f'--{boundary}\r\nContent-Disposition: form-data; '
+                f'name="{k}"\r\n\r\n{v}\r\n'.encode()
             )
         parts.append(
             f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{fname}"\r\n'
             f"Content-Type: {fmime}\r\n\r\n".encode()
         )
-        parts.append(fbytes)
-        parts.append(f"\r\n--{boundary}--\r\n".encode())
-        return b"".join(parts), f"multipart/form-data; boundary={boundary}"
+        prefix = b"".join(parts)
+        suffix = f"\r\n--{boundary}--\r\n".encode()
+        file_size = os.fstat(file_obj.fileno()).st_size
+
+        def stream() -> Generator[bytes, None, None]:
+            yield prefix
+            remaining = file_size
+            while remaining:
+                chunk = file_obj.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    raise RuntimeError("File changed while it was being uploaded")
+                remaining -= len(chunk)
+                yield chunk
+            yield suffix
+
+        content_length = len(prefix) + file_size + len(suffix)
+        return (
+            stream(),
+            f"multipart/form-data; boundary={boundary}",
+            content_length,
+        )
 
     # --- Async task polling ---
 
@@ -604,31 +738,24 @@ def detect_api_key_type(script_file=None):
 
 
 # ---------------------------------------------------------------------------
-# Token Plan model allowlists (frozenset for O(1) lookup)
+# Token Plan model allowlists (loaded from CDN)
 # ---------------------------------------------------------------------------
 
-_TOKEN_PLAN_MODELS_PERSONAL: frozenset[str] = frozenset({
-    # Text / Reasoning (some also support vision)
-    "qwen3.8-max", "qwen3.8-flash", "qwen3.7-max", "qwen3.7-plus", "qwen3.6-flash",
-    "glm-5.2",
-    "deepseek-v4-pro", "deepseek-v4-pro-0813", "deepseek-v4-flash-0731",
-    # Image
-    "qwen-image-3.0-pro", "wan2.7-image", "wan2.7-image-pro",
-    # Video
-    "happyhorse-1.1-i2v", "happyhorse-1.1-t2v", "happyhorse-1.1-r2v",
-    # Audio
-    "qwen-audio-3.0-tts-plus", "qwen-audio-3.0-realtime-plus",  # realtime; platform-available, not implemented by any skill
-    "qwen-audio-3.0-asr-flash",  # ASR; whitelist-reserved, no script entry in this repo
-})
+_TOKEN_PLAN_MODEL_CONFIG = "qianwen-token-plan-config.json"
 
-_TOKEN_PLAN_MODELS_TEAM: frozenset[str] = _TOKEN_PLAN_MODELS_PERSONAL | frozenset({
-    # Extra text
-    "qwen3.6-plus", "deepseek-v4-flash", "deepseek-v3.2",
-    "kimi-k2.7-code", "kimi-k2.6", "kimi-k2.5",
-    "glm-5.1", "glm-5", "MiniMax-M2.5",
-    # Extra image
-    "qwen-image-2.0", "qwen-image-2.0-pro",
-})
+
+def _load_token_plan_models() -> tuple[frozenset[str], frozenset[str]]:
+    config = load_cdn_model_config(
+        _TOKEN_PLAN_MODEL_CONFIG,
+        required_keys=("personal_models", "team_models"),
+    )
+    personal = config.get("personal_models")
+    team = config.get("team_models")
+    if not isinstance(personal, list) or not all(isinstance(item, str) for item in personal):
+        raise RuntimeError("Invalid Token Plan model configuration: personal_models must be a string array")
+    if not isinstance(team, list) or not all(isinstance(item, str) for item in team):
+        raise RuntimeError("Invalid Token Plan model configuration: team_models must be a string array")
+    return frozenset(personal), frozenset(team)
 
 
 def validate_token_plan_model(
@@ -640,12 +767,13 @@ def validate_token_plan_model(
     if not is_token_plan_key(api_key):
         return
 
+    personal_models, team_models = _load_token_plan_models()
     if plan_type == "personal":
-        allowed = _TOKEN_PLAN_MODELS_PERSONAL
+        allowed = personal_models
     elif plan_type == "team":
-        allowed = _TOKEN_PLAN_MODELS_TEAM
+        allowed = team_models
     else:
-        allowed = _TOKEN_PLAN_MODELS_TEAM  # superset
+        allowed = team_models  # superset
 
     if model in allowed:
         return
@@ -783,6 +911,39 @@ def http_post(
     )
 
 
+def _sse_error_message(
+        chunk: Any,
+        event_type: str,
+        api_key: str,
+) -> Optional[str]:
+    """Return a safe error message for an SSE error payload, if present."""
+    error_payload = chunk.get("error") if isinstance(chunk, dict) else None
+    has_top_level_error = isinstance(chunk, dict) and (
+        not chunk.get("choices")
+        and chunk.get("code") is not None
+        and chunk.get("message") is not None
+    )
+    if event_type.lower() != "error" and error_payload is None and not has_top_level_error:
+        return None
+
+    payload = error_payload if error_payload is not None else chunk
+    if isinstance(payload, dict):
+        code = payload.get("code") or payload.get("type")
+        message = payload.get("message")
+        if code and message:
+            detail = f"{code}: {message}"
+        elif code or message:
+            detail = str(code or message)
+        else:
+            detail = json.dumps(payload, ensure_ascii=False)
+    else:
+        detail = str(payload)
+
+    if api_key and len(api_key) > 8 and api_key in detail:
+        detail = detail.replace(api_key, mask_key(api_key))
+    return f"SSE error: {sanitize_diagnostic(detail)[:500]}"
+
+
 def stream_sse(
         url: str,
         api_key: str,
@@ -810,9 +971,12 @@ def stream_sse(
             pass
         if api_key and len(api_key) > 8 and api_key in body:
             body = body.replace(api_key, mask_key(api_key))
-        raise RuntimeError(f"HTTP {exc.code}: {body[:500]}") from exc
+        raise RuntimeError(f"HTTP {exc.code}: {sanitize_diagnostic(body)[:500]}") from None
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Network error: {sanitize_diagnostic(str(exc.reason))}") from None
 
     buf = b""
+    event_type = ""
     try:
         while True:
             raw = resp.read(4096)
@@ -822,15 +986,33 @@ def stream_sse(
             while b"\n" in buf:
                 line_bytes, buf = buf.split(b"\n", 1)
                 line = line_bytes.decode("utf-8", errors="replace").strip()
-                if not line or not line.startswith("data:"):
+                if not line:
+                    event_type = ""
+                    continue
+                if line.startswith("event:"):
+                    event_type = line[6:].strip()
+                    continue
+                if not line.startswith("data:"):
                     continue
                 json_str = line[5:].strip()
                 if json_str == "[DONE]":
                     return
                 try:
-                    yield json.loads(json_str)
+                    chunk = json.loads(json_str)
                 except json.JSONDecodeError:
+                    if event_type.lower() == "error":
+                        detail = json_str
+                        if api_key and len(api_key) > 8 and api_key in detail:
+                            detail = detail.replace(api_key, mask_key(api_key))
+                        detail = sanitize_diagnostic(detail)[:500]
+                        raise RuntimeError(f"SSE error: {detail}") from None
                     pass
+                else:
+                    error_message = _sse_error_message(chunk, event_type, api_key)
+                    if error_message:
+                        raise RuntimeError(error_message)
+                    yield chunk
+                event_type = ""
     finally:
         resp.close()
 
@@ -868,9 +1050,14 @@ def resolve_file(
     pass_through = ("http://", "https://", "data:") + provider.managed_url_schemes()
     if value.startswith(pass_through):
         return value
-    # Strip file:// URI scheme prefix so Path() can resolve local paths
     if value.startswith("file://"):
-        value = value[7:]
+        parsed = urllib.parse.urlparse(value)
+        if parsed.netloc and parsed.netloc.lower() != "localhost":
+            raise ValueError(
+                f"Cannot resolve non-local file URI authority {parsed.netloc!r}; "
+                "only an empty authority or 'localhost' is supported."
+            )
+        value = urllib.request.url2pathname(parsed.path)
     p = Path(value)
     if not (p.exists() and p.is_file()):
         return value
@@ -880,7 +1067,7 @@ def resolve_file(
     if api_key and model:
         managed_url = provider.upload_file(api_key, model, p)
         tag = "48 h TTL" if managed_url.startswith("oss://") else "custom OSS"
-        print(f"Uploaded {p.name} -> {managed_url} ({tag})", file=sys.stderr)
+        print(sanitize_diagnostic(f"Uploaded {p.name} -> {managed_url} ({tag})"), file=sys.stderr)
         return managed_url
 
     if file_size > _BASE64_FILE_LIMIT:
@@ -900,8 +1087,11 @@ def download_file(url: str, dest: Path, *, timeout: int = 120) -> Path:
     """Download a file from *url* to *dest*, creating parent dirs as needed."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     req = urllib.request.Request(url, headers={"User-Agent": "qianwenai-skill"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        dest.write_bytes(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            dest.write_bytes(resp.read())
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Download failed: {sanitize_diagnostic(str(exc))}") from None
     return dest
 
 

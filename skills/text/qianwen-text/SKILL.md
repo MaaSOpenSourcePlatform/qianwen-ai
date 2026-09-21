@@ -46,54 +46,28 @@ print(detect_api_key_type('scripts/qianwen_lib.py'))
 
 | Output | Meaning |
 |--------|---------|
-| `token-plan` | Token Plan key — use only models from the Token Plan list below. |
+| `token-plan` | Token Plan key — use only models from the Token Plan catalog below. |
 | `payg` | Pay-as-you-go key — full model catalog available. |
 | `not-set` | No key configured. |
 
-For Token Plan, use an exact model from qianwen-model-selector, or consult
-`qianwen-ops-auth/references/tokenplan.md`. If unavailable, use:
-- Personal: https://platform.qianwenai.com/docs/token-plan/personal/token-plan-personal-overview.md
-- Team: https://platform.qianwenai.com/docs/token-plan/team/token-plan-team-overview.md
+For Token Plan, fetch and read the current [Token Plan model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-token-plan-models.md), then use an exact listed model. If CDN access fails, use the [local fallback](cdn/references/qianwen-token-plan-models.md).
 
 Token Plan supports only specific models — use exactly a model from the references above; do not
 guess or probe model availability. For PAYG, continue below.
 
 ## Model Selection
 
-| Model              | Use Case                                                                |
-|--------------------|-------------------------------------------------------------------------|
-| `qwen3.8-max`      | Strongest flagship — 2.4T MoE, native vision-language, hybrid thinking (on by default), 1M context, built-in tools. Best for complex reasoning & coding. |
-| `qwen3.8-flash`    | Fast Qwen3.8 — multimodal (text+image+video), hybrid thinking (on by default), 1M context. Fast, cost-effective. |
-| `qwen3.7-max`      | Flagship agent model — 1M context, thinking mode, function calling, built-in tools, structured output. |
-| `qwen3.7-plus`     | **Recommended default** — multimodal vision-language, enhanced Agent execution & coding, 1M context, thinking on by default. |
-| `qwen3.7-flash`    | Next-gen lightweight — multimodal (text+image+video), 1M context, full features at lower cost. |
-| `qwen3.6-plus`     | Multimodal (text+image+video), 1M context, thinking on by default, strong coding & universal recognition |
-| `qwen3.5-plus`     | Balanced performance, cost, speed, 1M context, thinking on by default   |
-| `qwen3.5-flash`    | Fast, low-cost, 1M context                                              |
-| `qwen3-max`        | Legacy strongest capability, built-in tools (web search, code interpreter) |
-| `qwen-plus`        | General purpose                                                         |
-| `qwen-turbo`       | Cheap, low latency                                                   |
-| `qwen3-coder-next` | **Recommended code model** — best balance of quality, speed, cost; agentic coding |
-| `qwen3-coder-plus` | Code generation — highest quality for complex tasks                     |
-| `qwen3-coder-flash`| Code generation — fast responses, lower cost                            |
-| `qwq-plus`         | Reasoning / chain-of-thought                                            |
-| `qwen-mt-plus`     | Machine translation — best quality, 92 languages                        |
-| `qwen-mt-flash`    | Machine translation — fast, low cost, 92 languages                      |
-| `qwen-mt-lite`     | Machine translation — real-time chat, fastest, 31 languages             |
-| `qwen-plus-character`    | Role-playing — character restoration, empathetic dialog             |
-| `qwen-flash-character`   | Role-playing — fast, lower cost                                    |
+Before selecting, recommending, or defaulting a model, fetch and read the current [Qwen text model catalog](https://alioth.alicdn.com/skills-info/models/references/qianwen-text-models.md). It contains the model list, basic model information, recommendations, and default model. If CDN access fails, use the [local fallback](cdn/references/qianwen-text-models.md).
 
 1. **User specified a model** → use directly.
 2. **Consult the qianwen-model-selector skill** when model choice depends on requirement, scenario, or pricing.
-3. **No signal, clear task** → `qwen3.7-plus` (default). For strongest reasoning/coding → `qwen3.8-max`.
+3. **No signal, clear task** → use the default from the model catalog. For strongest reasoning/coding, use its recommended high-capability option.
 
-> Fallback: if model-selector is unavailable, the defaults in the table above apply.
-
-> **⚠️ Important**: The model list above is a **point-in-time snapshot** and may be outdated. Model availability
+> **⚠️ Important**: The model catalog is a **point-in-time snapshot** and may be outdated. Model availability
 > changes frequently. **Always check the [official model list](https://www.qianwenai.com/models)
 > for the authoritative, up-to-date catalog before making model decisions.**
 
-> **Model details**: For more information about a specific model, direct the user to its detail page: `https://www.qianwenai.com/models/<model-name>` (replace `<model-name>` with the exact model ID, e.g. `qwen3.6-plus` → https://www.qianwenai.com/models/qwen3.6-plus). NEVER modify or guess the model name in the URL.
+> **Model details**: For more information about a specific model, direct the user to `https://www.qianwenai.com/models/<model-name>`. Replace `<model-name>` with the exact model ID; never modify or guess it.
 
 > **Dynamic model queries**: If the **qianwen-model-selector** skill or **QianWen CLI** (`qianwen models info <model>`) is available, use it for real-time model data. CLI requires authentication — see the **qianwen-usage** skill for login flow.
 
@@ -198,7 +172,7 @@ in [execution-guide.md](references/execution-guide.md).
 | `max_tokens`          | int             | Max output tokens                                                                                    |
 | `tools`               | array           | Function definitions for tool calling                                                                |
 | `stream`              | bool            | Enable streaming (recommended for interactive use)                                                   |
-| `enable_thinking`     | bool            | Enable thinking mode. **Model defaults apply**: `qwen3.8-max`/`qwen3.8-flash`/`qwen3.7-max`/`qwen3.7-plus`/`qwen3.7-flash`/`qwen3.6-plus`/`qwen3.6-flash`/`qwen3.5-plus`/`qwen3.5-flash` have thinking **ON by default**. Only set explicitly when user requests deep thinking or needs to disable for flash models. Adds latency for real-time tasks. |
+| `enable_thinking`     | bool            | Enable thinking mode. Model defaults vary; check the model catalog above before overriding them. Adds latency for real-time tasks. |
 
 ### Response Fields
 
@@ -232,7 +206,7 @@ For detailed usage of each feature, see [api-guide.md](references/api-guide.md) 
 | `401 Unauthorized`      | Invalid or missing API key          | Run **qianwen-ops-auth** if available; else prompt user to set key (non-plaintext check only) |
 | `429 Too Many Requests` | Rate limit exceeded                 | Retry with backoff                                                                         |
 | `500` / `502` / `503`   | Server error                        | Retry; check status page                                                                   |
-| `Invalid model`         | Model ID not found                  | Verify model name against Model Selection table                                            |
+| `Invalid model`         | Model ID not found                  | Verify the ID against the model catalog above |
 | `Invalid parameter`     | Bad request body                    | Validate JSON and field types                                                              |
 | `TypeError: ...proxies` | openai SDK vs httpx incompatibility | `pip install --upgrade openai` (>=1.55.0); or use script (pure stdlib)                     |
 
