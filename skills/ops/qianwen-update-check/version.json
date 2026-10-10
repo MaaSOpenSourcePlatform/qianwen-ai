@@ -1,6 +1,6 @@
 {
-  "version": "0.4.0",
+  "version": "0.6.0",
   "name": "QianWen-AI/qianwen-ai",
-  "released": "2026-09-01",
-  "info": "Alipay recharge support"
+  "released": "2026-10-10",
+  "info": "TokenPlan purchase support"
 }

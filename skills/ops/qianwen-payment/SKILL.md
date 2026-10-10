@@ -1,15 +1,17 @@
 ---
 name: qianwen-payment
-description: "QianWenAI cash balance query and fixed-amount Alipay recharge orchestration. Owns the outer recharge lifecycle while delegating the payment-side step to `alipay-payment-skill` when selected. Covers balance, recharge orders, order results, recharge history, missing current-order QR recovery, Token Plan redirects, and recharge page guidance. TRIGGER when: explicit QianWenAI balance query, confirmed recharge request with amount, model-call error explicitly reporting insufficient QianWenAI balance or account overdue, recharge result/history query, the user reports that the current QianWenAI recharge QR was not displayed, Token Plan purchase redirect, user wants guidance for the QianWenAI recharge page, or user explicitly invokes this skill by name (e.g. use qianwen-payment). DO NOT TRIGGER when: usage/billing/subscription queries (use qianwen-usage), incoming Alipay payment links or unrelated merchant orders (use alipay-payment-skill), refunds, non-QianWenAI products."
+description: "Qwen AI Platform payment skill, used for account balance enquiries, fix-amount recharge, recharge page guidence, TokenPlan quotations, TokenPlan purchases and TokenPlan page guidence. TRIGGER for explicit Qwen AI Platform balance or recharge requests, recharge result/history/page requests, Token Plan quotes or new purchases, or a model error that explicitly reports insufficient cash balance or an overdue account. DO NOT TRIGGER for usage, quota, cost, settled bills, standalone subscription status, or team seats (use qianwen-usage); incoming Alipay links or unrelated merchant orders (use alipay-payment-skill); refunds; renewals; upgrades; or non-Qwen products."
 ---
 
-# QianWen Payment
+# Qwen AI Platform Payment
 
-QianWenAI (千问AI平台) cash balance query and fixed-amount Alipay recharge. Use this Skill only for a QianWenAI account. Do not infer recharge intent or an overdue account from a low balance, a generic quota error, HTTP status, or unrelated model failure.
+Qwen AI Platform (千问AI平台) cash balance, fixed-amount Alipay recharge, and new Token Plan purchase orchestration. Use this Skill only for a Qwen AI Platform account. Do not infer recharge intent or an overdue account from a low balance, a generic quota error, HTTP status, or unrelated model failure.
+
+Recharge and Token Plan are isolated domains. Recharge uses only the original recharge references and scripts listed below. Token Plan uses only its explicitly listed Token Plan files, plus the unchanged generic `command-resolver.mjs`. Never use one domain's validator, poller, recovery state, or user-facing result wording in the other domain.
 
 ## Compatibility and resources
 
-Requires Node 18.18+ for every route in this Skill. Use `scripts/preflight.mjs` to enforce the runtime baseline, determine QianWen CLI compatibility, and select the available Alipay payment path; do not reproduce or override its version and capability decisions in prose.
+Requires Node 18.18+ for every route in this Skill. Recharge uses `scripts/preflight.mjs`; Token Plan uses `scripts/tokenplan-preflight.mjs`. Each domain script exclusively owns its runtime baseline, QianWen CLI compatibility, validation, and Alipay path decisions; do not reproduce or override those decisions in prose.
 
 | Location | Authoritative responsibility |
 | --- | --- |
@@ -19,8 +21,12 @@ Requires Node 18.18+ for every route in this Skill. Use `scripts/preflight.mjs` 
 | `references/recharge-flow.md` | Confirmed-order business sequence, branching, stop and recovery |
 | `references/cli-contracts.md` | Commands, arguments, JSON shapes, script interfaces and exit codes |
 | `references/sources.md` | Manual provenance lookup only |
+| `scripts/tokenplan-preflight.mjs` | Token Plan dependency probes and response validation |
+| `scripts/tokenplan-order-contracts.mjs` | Shared Token Plan payment-result and retained-order history contracts |
+| `scripts/poll-tokenplan-payment.mjs` | Token Plan bounded foreground payment wait |
+| `references/tokenplan-flow.md` | Complete Token Plan dependency, quote, purchase, settlement, activation, and recovery flow |
 
-Load references only when the current route needs their authoritative detail. For fixed-amount recharge, read `recharge-flow.md` only after the user confirms order creation. Also read its recovery section when the user explicitly reports that the current order's QR was not displayed and the current order's Alipay materials are still retained.
+Load references only when the current route needs their authoritative detail. For fixed-amount recharge, read `recharge-flow.md` only after the user confirms order creation. Also read its recovery section when the user explicitly reports that the current order's QR was not displayed and the current order's Alipay materials are still retained. For a Token Plan quote, purchase, or existing-purchase follow-up, load `tokenplan-flow.md`; do not load Recharge references.
 
 ## Routes
 
@@ -33,9 +39,10 @@ Load references only when the current route needs their authoritative detail. Fo
 | Existing-order result | `recharge-result` | One read-only snapshot; never starts a polling loop |
 | Recharge history | `recharge-history` | Read-only, default 30 days |
 | Recharge page guidance | `recharge-page` | Confirm before opening the browser |
-| Token Plan purchase | None | Redirect to the Token Plan page listed in `sources.md` |
+| Token Plan quote or new purchase | `token-plan` | Follow `tokenplan-flow.md`; one confirmation authorizes one create request |
+| Existing Token Plan purchase follow-up | `token-plan-recovery` | Query the retained order first; only an explicit request may reuse its materials or resume the same Alipay handoff while it remains unpaid; never creates an order |
 
-## Core rules
+## Recharge core rules
 
 1. **Localize only QianWen-owned output.** Follow the language of the user's latest substantive message. The AI risk notice may be translated in full. Only user-facing Alipay content is passed through verbatim; route-specific control data is never user-facing.
 2. **One confirmation, one create attempt.** Confirm the exact masked account, normalized amount, Alipay method, and operation scope. A confirmation authorizes exactly one invocation of the create command and is consumed before that invocation. It cannot authorize another order, including in the same conversation with the same account and amount or for a retry, replacement, or additional order. A status query, QR recovery, payment continuation, or statement that payment was completed never authorizes creation. Never automatically retry an interrupted, malformed, timed-out, nonzero, or otherwise unconfirmed create attempt.
@@ -47,7 +54,7 @@ Load references only when the current route needs their authoritative detail. Fo
 8. **Polling route.** Use [recharge-flow.md](references/recharge-flow.md) for polling eligibility and business sequencing.
 9. **Consistent execution context.** Apply the execution-context and authentication-recovery contract in [cli-contracts.md](references/cli-contracts.md) to QianWen commands.
 
-## Direct-path sessionId resolution
+## Recharge direct-path sessionId resolution
 
 This section applies only to the direct path. The delegated path follows `alipay-payment-skill`. `sessionId` is optional and applies only to `alipay-bot submit-payment`; `trigger-payment-signal` never receives it. Use the first non-empty value from this order:
 
@@ -59,7 +66,7 @@ This section applies only to the direct path. The delegated path follows `alipay
 
 Use the value as-is. Do not generate one, ask the user for one, or substitute another business ID. If all sources are empty, omit `--session-id`.
 
-## Pre-confirmation fast path
+## Recharge pre-confirmation fast path
 
 ### 1. Amount
 
@@ -102,7 +109,7 @@ Then show the masked account, normalized amount, Alipay method, and that confirm
 - Negative: run nothing and output the localized equivalent of `Recharge canceled`.
 - Material change: show a new confirmation block with the risk notice.
 
-## User-visible progress
+## Recharge user-visible progress
 
 Communicate only these business transitions. Do not expose CLI commands, arguments, skill routing, validators, service names, polling internals, `sessionId`, the internal polling deadline, or raw QianWen-side errors unless the user explicitly asks for troubleshooting information.
 
@@ -140,7 +147,7 @@ When the confirmed-flow contract requests a post-terminal balance query, append 
 
 Never say that you will report the result automatically or later. The user must send another message before a later snapshot can be queried.
 
-## Other routes
+## Recharge read-only and page routes
 
 ### Balance
 
@@ -166,10 +173,12 @@ result.
 
 Explain that the command opens the validated QianWenAI recharge page and ask whether to proceed before using [cli-contracts.md § Recharge page guidance](references/cli-contracts.md). Show the returned validated URL; never construct one.
 
-### Token Plan
+## Token Plan
 
-Do not buy, renew, upgrade, or add quota to a Token Plan. Direct purchase requests to the Token Plan page listed in [sources.md](references/sources.md). Route existing-plan status, quota, and billing questions to `qianwen-usage`.
+For a quote, new Individual or Team purchase, payment continuation, missing payment material, or retained-order result check, follow [tokenplan-flow.md](references/tokenplan-flow.md). This runbook and its scripts exclusively own Token Plan validation, handoff, activation, and recovery.
+
+Do not renew, upgrade, or add quota to a Token Plan. Route standalone existing-plan status, quota, team-seat, and billing questions to `qianwen-usage`.
 
 ## Update check
 
-For update requests, use the sibling `qianwen-update-check` Skill when available; otherwise run `qianwen version --check`. Never run an update check during an unresolved recharge flow.
+For update requests, use the sibling `qianwen-update-check` Skill when available; otherwise run `qianwen version --check`. Never run an update check during an unresolved recharge or Token Plan payment flow.

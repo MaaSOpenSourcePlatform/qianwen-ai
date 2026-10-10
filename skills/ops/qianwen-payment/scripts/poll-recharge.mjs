@@ -30,7 +30,7 @@ import { validateRechargeResult } from "./recharge-result-contract.mjs";
 const SAFE_ARG_RE = /^[A-Za-z0-9._:=-]+$/;
 
 const DEFAULT_INTERVAL_SECONDS = 5;
-const DEFAULT_MAX_SECONDS = 7200;
+const DEFAULT_MAX_SECONDS = 600;
 const DEFAULT_CALL_TIMEOUT_SECONDS = 20;
 const CONSECUTIVE_READ_FAILURE_LIMIT = 3;
 // Retry only failures that may recover without changing local configuration or

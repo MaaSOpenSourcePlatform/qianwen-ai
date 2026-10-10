@@ -132,6 +132,9 @@ const PROBE_TIMEOUT_MS = 20_000;
 const SEMVER_RE = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
 const AMOUNT_RE = /^(\d+)(?:\.(\d{1,2}))?$/;
 const DECIMAL_RE = /^\d+(?:\.\d{1,2})?$/;
+// Balance is an account-state snapshot, not a transaction input. An overdue
+// account may legitimately report a negative available amount.
+const SIGNED_DECIMAL_RE = /^-?\d+(?:\.\d{1,2})?$/;
 
 // Only fixed literals from this file are ever passed to run(); this pattern is
 // the defensive gate that keeps the Windows .cmd path free of injectable text.
@@ -526,7 +529,7 @@ export function validateBalanceSummary(doc) {
   if (!isPlainObject(doc)) return ["balance_not_a_json_object"];
   const errors = [];
   const available = doc.availableAmount;
-  if (typeof available !== "string" || !DECIMAL_RE.test(available.trim())) {
+  if (typeof available !== "string" || !SIGNED_DECIMAL_RE.test(available.trim())) {
     errors.push("available_amount_not_decimal_string");
   }
   if (doc.currency !== "CNY") errors.push("currency_not_cny");
