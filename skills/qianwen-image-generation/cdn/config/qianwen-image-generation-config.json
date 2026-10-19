@@ -1,0 +1,51 @@
+{
+  "default_model": "qwen-image-3.0-pro",
+  "i2i_default_model": "wan2.5-i2i-preview",
+  "image_edit_models": [
+    "wan2.6-image"
+  ],
+  "multi_func_models": [
+    "wan2.7-image-pro",
+    "wan2.7-image"
+  ],
+  "i2i_models": [
+    "wan2.5-i2i-preview"
+  ],
+  "qwen_image_edit_models": [
+    "qwen-image-3.0-pro",
+    "qwen-image-3.0",
+    "qwen-image-2.0-pro",
+    "qwen-image-2.0",
+    "qwen-image-edit-max",
+    "qwen-image-edit-plus",
+    "qwen-image-edit"
+  ],
+  "qwen_image_edit_prefixes": [
+    "qwen-image-3.0-pro-",
+    "qwen-image-3.0-",
+    "qwen-image-2.0-pro-",
+    "qwen-image-2.0-",
+    "qwen-image-edit-max-",
+    "qwen-image-edit-plus-",
+    "qwen-image-edit-"
+  ],
+  "qwen_image_30_models": [
+    "qwen-image-3.0-pro",
+    "qwen-image-3.0"
+  ],
+  "qwen_t2i_models": [
+    "qwen-image-plus",
+    "qwen-image"
+  ],
+  "qwen_image_edit_single_output_models": [
+    "qwen-image-edit"
+  ],
+  "qwen_reference_required_models": [
+    "qwen-image-edit-max",
+    "qwen-image-edit-plus",
+    "qwen-image-edit"
+  ],
+  "z_image_models": [
+    "z-image-turbo"
+  ]
+}
