@@ -1,0 +1,219 @@
+{
+  "version": 1,
+  "id": "ata::task-page-query",
+  "description": "查询任务信息，查询进行中的任务",
+  "javaMethod": "com.alibaba.atasuper.client.v2.task.TaskClientService#pageQuery",
+  "inputSchema": {
+    "description": "查询任务信息，查询进行中的任务",
+    "properties": {
+      "fieldName_0": {
+        "description": "任务查询参数",
+        "properties": {
+          "currentPage": {
+            "description": "当前页码，默认 1",
+            "type": "number"
+          },
+          "enableReturnCount": {
+            "description": "是否返回总条数，默认 false 不返回以提高性能",
+            "type": "boolean"
+          },
+          "pageSize": {
+            "description": "分页大小，默认 20",
+            "type": "number"
+          },
+          "type": {
+            "description": "任务类型;DAILY 每日任务;GROWTH 成长任务;ACTIVITY 活动任务;",
+            "enum": [
+              "DAILY",
+              "GROWTH",
+              "ACTIVITY"
+            ],
+            "type": "string"
+          },
+          "userTaskStatusList": {
+            "description": "按当前用户的任务完成状态筛选，传值时会关联当前登录用户的 user_task 记录",
+            "items": {
+              "description": "用户任务完成状态;IN_PROGRESS 进行中;COMPLETED 已完成未领取奖励;RECEIVED_AWARD 已领取奖励;",
+              "enum": [
+                "IN_PROGRESS",
+                "COMPLETED",
+                "RECEIVED_AWARD"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "fieldName_1": {
+        "description": "返回字段的选择器，可以返回一些额外字段，在选择器中没有的字段默认这个接口都会直接返回的，在用户没有特别说明的情况下选择器建议不传任何字段",
+        "properties": {
+          "awardImage": {
+            "description": "是否返回实物奖品的图片列表，需同时开启 withBlobs",
+            "type": "boolean"
+          },
+          "completedRatio": {
+            "description": "是否返回当前用户的任务完成进度与完成状态，需关联当前登录用户",
+            "type": "boolean"
+          },
+          "withBlobs": {
+            "description": "是否返回奖励内容等大字段，含 awardContent 中的奖励数额与描述",
+            "type": "boolean"
+          }
+        },
+        "required": [],
+        "type": "object"
+      }
+    },
+    "required": [
+      "fieldName_0"
+    ],
+    "type": "object"
+  },
+  "outputSchema": {
+    "description": "AtaPageResult<TaskClientDTO> 任务分页结果",
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean",
+        "description": "是否成功"
+      },
+      "errorCode": {
+        "type": "string",
+        "description": "错误编码"
+      },
+      "errorMsg": {
+        "type": "string",
+        "description": "错误信息"
+      },
+      "traceId": {
+        "type": "string",
+        "description": "追踪id"
+      },
+      "content": {
+        "type": "object",
+        "description": "分页数据",
+        "properties": {
+          "data": {
+            "type": "array",
+            "description": "任务列表",
+            "items": {
+              "$ref": "#/$defs/TaskClientDTO"
+            }
+          },
+          "totalCount": {
+            "type": "number",
+            "description": "总条数（需要 enableReturnCount=true 才会返回）"
+          },
+          "currentPage": {
+            "type": "number",
+            "description": "当前页码"
+          },
+          "pageSize": {
+            "type": "number",
+            "description": "分页大小"
+          }
+        }
+      }
+    },
+    "$defs": {
+      "TaskClientDTO": {
+        "type": "object",
+        "description": "任务信息",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "任务主键"
+          },
+          "name": {
+            "type": "string",
+            "description": "任务名称"
+          },
+          "actionTips": {
+            "type": "string",
+            "description": "行动点文案"
+          },
+          "actionUrl": {
+            "type": "string",
+            "description": "行动点链接"
+          },
+          "gmtStart": {
+            "type": "string",
+            "description": "任务起始时间"
+          },
+          "gmtEnd": {
+            "type": "string",
+            "description": "任务结束时间"
+          },
+          "taskPublishStatus": {
+            "type": "string",
+            "description": "任务发布状态;UN_STARTED 未开始;IN_PROGRESS 进行中;EXPIRED 已过期;"
+          },
+          "type": {
+            "type": "string",
+            "description": "任务类型;DAILY 每日任务;GROWTH 成长任务;ACTIVITY 活动任务;"
+          },
+          "userTaskStatus": {
+            "type": "string",
+            "description": "当前用户的任务完成状态（需通过 selector completedRatio=true 开启）;IN_PROGRESS 进行中;COMPLETED 已完成未领取奖励;RECEIVED_AWARD 已领取奖励;"
+          },
+          "completedRatio": {
+            "type": "number",
+            "description": "当前用户的完成进度 0-100（需通过 selector completedRatio=true 开启）"
+          },
+          "awardContent": {
+            "$ref": "#/$defs/TaskAwardClientDTO",
+            "description": "奖励内容（需通过 selector withBlobs=true 开启）"
+          },
+          "userCount": {
+            "type": "number",
+            "description": "任务参与人数"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "actionTips",
+          "actionUrl"
+        ]
+      },
+      "TaskAwardClientDTO": {
+        "type": "object",
+        "description": "任务奖励内容",
+        "properties": {
+          "awardAmount": {
+            "type": "number",
+            "description": "奖励数额"
+          },
+          "awardDescription": {
+            "type": "string",
+            "description": "奖品描述，实物奖品时使用"
+          },
+          "awardImageList": {
+            "type": "array",
+            "description": "奖品图片列表（需通过 selector withBlobs=true 且 awardImage=true 开启）",
+            "items": {
+              "$ref": "#/$defs/FileClientDTO"
+            }
+          }
+        }
+      },
+      "FileClientDTO": {
+        "type": "object",
+        "description": "文件信息",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "文件 oss Key"
+          },
+          "url": {
+            "type": "string",
+            "description": "文件预览 url"
+          }
+        }
+      }
+    }
+  }
+}

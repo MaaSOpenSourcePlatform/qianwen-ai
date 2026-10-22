@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "id": "ata::oss-calculate-post-signature",
+  "description": "生成一个文件、图片上传的签名，然后上传；",
+  "javaMethod": "com.alibaba.atasuper.client.v2.oss.OssClientClientService#calculatePostSignature",
+  "inputSchema": {
+    "description": "生成一个文件、图片上传的签名，然后上传；",
+    "properties": {
+      "fieldName_0": {
+        "description": "上传参数",
+        "properties": {
+          "name": {
+            "description": "上传的文件名，需要带后缀",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "fieldName_0"
+    ],
+    "type": "object"
+  },
+  "outputSchema": {
+    "description": "AtaPojoResult<CalculatePostSignatureClientDTO> OSS 上传签名",
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean",
+        "description": "是否成功"
+      },
+      "errorCode": {
+        "type": "string",
+        "description": "错误编码"
+      },
+      "errorMsg": {
+        "type": "string",
+        "description": "错误信息"
+      },
+      "traceId": {
+        "type": "string",
+        "description": "追踪id"
+      },
+      "content": {
+        "type": "object",
+        "description": "上传签名信息",
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "OSS 上传 host"
+          },
+          "policy": {
+            "type": "string",
+            "description": "上传策略"
+          },
+          "accessId": {
+            "type": "string",
+            "description": "授权 id"
+          },
+          "signature": {
+            "type": "string",
+            "description": "授权签名"
+          },
+          "expire": {
+            "type": "number",
+            "description": "过期时间戳"
+          },
+          "key": {
+            "type": "string",
+            "description": "文件上传 key"
+          },
+          "url": {
+            "type": "string",
+            "description": "文件链接"
+          },
+          "objectAcl": {
+            "type": "string",
+            "description": "权限控制"
+          }
+        }
+      }
+    },
+    "required": [
+      "success"
+    ]
+  }
+}

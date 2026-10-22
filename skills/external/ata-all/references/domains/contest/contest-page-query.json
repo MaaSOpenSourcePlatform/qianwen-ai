@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "id": "ata::contest-page-query",
+  "description": "征文活动查询，查询进行中的征文",
+  "javaMethod": "com.alibaba.atasuper.client.v2.contest.ContestClientService#pageQuery",
+  "inputSchema": {
+    "description": "分页查询进行中的征文活动，仅返回时间状态为进行中且已发布的征文活动",
+    "properties": {
+      "fieldName_0": {
+        "description": "征文活动查询参数",
+        "properties": {
+          "currentPage": {
+            "description": "当前页码，默认 1",
+            "type": "number"
+          },
+          "enableReturnCount": {
+            "description": "是否返回总条数，默认 false 不返回以提高性能",
+            "type": "boolean"
+          },
+          "objectType": {
+            "description": "参与对象类型，筛选支持该类型的征文活动;ARTICLE 文章;SPECIAL 专题;",
+            "type": "string"
+          },
+          "pageSize": {
+            "description": "分页大小，默认 20",
+            "type": "number"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "fieldName_1": {
+        "description": "返回字段的选择器，可以返回一些额外字段，在选择器中没有的字段默认这个接口都会直接返回的，在用户没有特别说明的情况下选择器建议不传任何字段",
+        "properties": {
+          "withBlobs": {
+            "description": "是否返回参与方式 objectTypeList 等大字段",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "withBlobs"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "fieldName_0"
+    ],
+    "type": "object"
+  },
+  "outputSchema": {
+    "description": "AtaPageResult<ContestClientDTO> 征文活动分页结果",
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean",
+        "description": "是否成功"
+      },
+      "errorCode": {
+        "type": "string",
+        "description": "错误编码"
+      },
+      "errorMsg": {
+        "type": "string",
+        "description": "错误信息"
+      },
+      "traceId": {
+        "type": "string",
+        "description": "追踪id"
+      },
+      "hasNextPage": {
+        "type": "boolean",
+        "description": "是否存在下一页（AtaPageResult 计算字段）"
+      },
+      "content": {
+        "type": "object",
+        "description": "分页数据",
+        "properties": {
+          "data": {
+            "type": "array",
+            "description": "征文活动列表",
+            "items": {
+              "$ref": "#/$defs/ContestClientDTO"
+            }
+          },
+          "totalCount": {
+            "type": "number",
+            "description": "总条数（需要 enableReturnCount=true 才会返回）"
+          },
+          "currentPage": {
+            "type": "number",
+            "description": "当前页码"
+          },
+          "pageSize": {
+            "type": "number",
+            "description": "分页大小"
+          }
+        }
+      }
+    },
+    "$defs": {
+      "ContestClientDTO": {
+        "type": "object",
+        "description": "征文活动信息",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "主键"
+          },
+          "name": {
+            "type": "string",
+            "description": "征文活动名称"
+          },
+          "actionTips": {
+            "type": "string",
+            "description": "行动点文案"
+          },
+          "actionUrl": {
+            "type": "string",
+            "description": "行动点链接"
+          },
+          "gmtStart": {
+            "type": "string",
+            "description": "活动开始时间"
+          },
+          "gmtEnd": {
+            "type": "string",
+            "description": "活动结束时间"
+          },
+          "timeStatus": {
+            "type": "string",
+            "description": "时间状态;UN_STARTED 未开始;IN_PROGRESS 进行中;EXPIRED 已过期;"
+          },
+          "objectTypeList": {
+            "type": "array",
+            "description": "参与方式（需通过 selector withBlobs=true 开启）",
+            "items": {
+              "type": "string",
+              "description": "参与对象类型;ARTICLE 文章;SPECIAL 专题;"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "actionTips",
+          "actionUrl"
+        ]
+      }
+    }
+  }
+}

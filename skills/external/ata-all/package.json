@@ -1,0 +1,11 @@
+{
+  "name": "ata-all",
+  "version": "0.35.0",
+  "description": "ATA（阿里内部技术社区 ata.atatech.org）官方接口。文章搜索/详情、首页头条、翰林院推荐、草稿增删改查、评论、收藏、点赞、用户查询、任务与征文活动查询、OSS 文件上传签名、钉钉「技小蜜」消息推送。 TRIGGER：用户提到 ATA、内部技术文章、ata.atatech.org 链接，或要求搜索/推送/收藏/评论/点赞文章，或要求创建/查询/修改文章草稿，或查询进行中的任务/征文活动，或上传文件/图片到 ATA。 SKIP：与 ATA 无关的通用编程问题。",
+  "publishConfig": {
+    "registry": "https://contextlab.alibaba-inc.com/skill"
+  },
+  "aoneKit": {
+    "generated": true
+  }
+}

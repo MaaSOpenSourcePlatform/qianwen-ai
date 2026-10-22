@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "id": "ata::url-analyze-url",
+  "description": "将 ATA 文章、团队圈、专业圈、话题圈链接解析为 objectId 与 objectType",
+  "javaMethod": "com.alibaba.atasuper.client.v2.url.UrlClientService#analyzeUrl",
+  "inputSchema": {
+    "description": "将 ATA 链接解析为 objectId 与 objectType",
+    "properties": {
+      "fieldName_0": {
+        "description": "URL 解析参数",
+        "properties": {
+          "url": {
+            "description": "ATA 链接，如 /articles/{id}、/community/team/{id}、/community/group/{id}、/channels/{id}",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "fieldName_0"
+    ],
+    "type": "object"
+  },
+  "outputSchema": {
+    "description": "AtaPojoResult<UrlClientDTO>",
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean",
+        "description": "是否成功"
+      },
+      "errorCode": {
+        "type": "string",
+        "description": "错误编码"
+      },
+      "errorMsg": {
+        "type": "string",
+        "description": "错误信息"
+      },
+      "traceId": {
+        "type": "string",
+        "description": "追踪id"
+      },
+      "content": {
+        "type": "object",
+        "description": "解析结果",
+        "properties": {
+          "objectId": {
+            "type": "number",
+            "description": "对象 ID（含义由 objectType 决定）"
+          },
+          "objectType": {
+            "type": "string",
+            "description": "ARTICLE 文章；S_TEAM_INFO 团队圈；ATA_GROUP 专业圈；CHANNEL 话题圈",
+            "enum": [
+              "ARTICLE",
+              "S_TEAM_INFO",
+              "ATA_GROUP",
+              "CHANNEL"
+            ]
+          }
+        },
+        "required": [
+          "objectId",
+          "objectType"
+        ]
+      }
+    },
+    "required": [
+      "success"
+    ]
+  }
+}
