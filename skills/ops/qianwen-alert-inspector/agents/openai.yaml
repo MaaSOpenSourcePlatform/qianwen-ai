@@ -1,0 +1,4 @@
+interface:
+  display_name: "千问告警排查"
+  short_description: "查询千问模型告警，关联规则、调用日志与统计，解释触发依据并提供处理建议"
+  default_prompt: "使用 $qianwen-alert-inspector 查询最近的千问模型告警，分析触发依据并给出有来源的处理建议。"
