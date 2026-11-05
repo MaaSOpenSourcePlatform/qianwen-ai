@@ -1,38 +1,38 @@
-# 告警诊断关联接口
+# APIs for Correlating Alert Evidence
 
-本文件用于在取得告警规则和触发历史后，补充同一资源、同一时间窗口的统计与请求证据。
-接口返回观测数据；“为什么触发”和“建议如何处理”由证据与规则共同推导。
-不要把本文件中的分析步骤描述成平台已有的根因诊断接口。
+Use this reference after retrieving alert rules and trigger history to collect statistics and request evidence for the same resource and time window.
+The APIs return observations; explanations of why an alert fired and what to do next must be derived from those observations and the rule.
+Do not describe the analysis steps in this reference as an existing platform root-cause diagnosis API.
 
-## 1. 调用与证据边界
+## 1. Invocation and Evidence Boundaries
 
-统一使用 `qianwen api call`，传递内联 JSON 对象作为 `--params`。
-命令参数、Type A/Type B 封装和分层错误解析统一见 [CLI 协议](cli-protocol.md)。
-`--params` 不支持 `@file` 或标准输入，不额外创建上传参数的包装脚本。
-本文件的 `reqDTO` 是 Type B 的业务对象，必须放进 `Data.reqDTO`。
-Type B 成功后从 `DataV2.data.data` 读取业务内容，不能把 `DataV2.ret` 当成诊断结果。
+Use `qianwen api call`, passing an inline JSON object through `--params`.
+See the [CLI protocol](cli-protocol.md) for command arguments, Type A/Type B envelopes, and error handling at each response layer.
+`--params` does not support `@file` or standard input. Do not create an additional wrapper script to upload parameters.
+In this reference, `reqDTO` is the Type B business request object and must be placed in `Data.reqDTO`.
+After confirming Type B success, read business data from `DataV2.data.data`; `DataV2.ret` is not a diagnostic result.
 
-诊断开始时先从前一步结果取得以下信息：
+Before starting the diagnosis, obtain the following from the preceding results:
 
-| 信息 | 来源与用途 |
+| Information | Source and purpose |
 | --- | --- |
-| 告警时间 | 触发历史，用于确定观测窗口和可比较的前置窗口 |
-| 规则资源 | 规则与历史中的工作空间、模型或资源标识，保持原值 |
-| 指标与阈值 | 规则中的指标、单位、聚合方式、比较符和持续时间 |
-| 工作空间身份 | 工作空间查询返回的业务 ID 与 `tenantId` |
-| 查询完整性 | 时间范围、筛选条件、页数、总数以及是否中断 |
+| Alert time | Trigger history; establishes the observation window and a comparable preceding window |
+| Rule resource | Workspace, model, or resource identifiers from the rule and history; preserve their values |
+| Metric and threshold | The rule's metric, unit, aggregation method, comparison operator, and duration |
+| Workspace identity | The business workspace ID and `tenantId` returned by the workspace query |
+| Query completeness | Time range, filters, pages retrieved, total count, and any interruption |
 
-不要凭名称相似就把两条资源记录关联起来，不把业务工作空间 ID 当作 `tenantId`。
-缺失指标单位、聚合口径或资源身份时，可以展示可得数据，但不能断言已重现触发条件。
-统计、日志与规则存在不一致时，保留差异并说明尚未对齐。
+Do not correlate resource records merely because their names are similar, or use a business workspace ID as `tenantId`.
+When the metric unit, aggregation semantics, or resource identity is missing, present available data without claiming to have reproduced the trigger condition.
+Preserve discrepancies between statistics, logs, and rules, and explain that their scopes or definitions have not yet been aligned.
 
-## 2. 解析工作空间
+## 2. Resolve the Workspace
 
-类型：Type B。
-产品：`sfm_bailian`；动作：`BroadScopeAspnGateway`。
-内部接口：`zeldaEasy.bailian-dash-workspace.space.listWorkspaces4Agent`。
+Type: Type B.
+Product: `sfm_bailian`; action: `BroadScopeAspnGateway`.
+Internal API: `zeldaEasy.bailian-dash-workspace.space.listWorkspaces4Agent`.
 
-第一页 `reqDTO`：
+First-page `reqDTO`:
 
 ```json
 {
@@ -41,27 +41,27 @@ Type B 成功后从 `DataV2.data.data` 读取业务内容，不能把 `DataV2.re
 }
 ```
 
-读取业务内容中的 `data` 或 `items` 数组，总数使用 `totalCount` 或 `total`。
-工作空间字段可为 `id`/`workspaceId`、`name`/`workspaceName`/`agentName`，租户字段为 `tenantId`。
-字段名兼容仅用于读取，不能据此向其他接口添加同名筛选参数。
+Read the `data` or `items` array in the business payload, using `totalCount` or `total` for the total.
+Workspace fields may be `id`/`workspaceId` and `name`/`workspaceName`/`agentName`; the tenant field is `tenantId`.
+These field aliases apply only when reading responses. They do not establish filter parameters for other APIs.
 
-按告警资源中的业务工作空间 ID 精确匹配，不按列表位置选取。
-如果用户只给名称，只有名称唯一且与告警资源一致时才采用对应记录。
-需要继续翻页时增加 `pageNo`；有总数就取到总数，无总数时以不足 200 条结束。
-发现重复页、总数改变、空页但尚未达到总数时，标记查询不完整。
+Match the business workspace ID from the alert resource exactly; do not select by list position.
+If the user provides only a name, use a matching record only when the name is unique and consistent with the alert resource.
+Increment `pageNo` to continue. When a total is available, retrieve that many records; otherwise, stop when a page contains fewer than 200 records.
+Mark the query incomplete if pages repeat, the total changes, or an empty page appears before the reported total is reached.
 
-模型统计查询的 `Data.cornerstoneParam.switchAgent` 使用匹配记录返回的数值 `tenantId`。
-不能往 `reqDTO` 猜加 `workspaceId`、`tenantId`、`model_call_source` 或计费模式字段。
-没有唯一匹配时先报告关联不确定，不能静默切换到默认工作空间。
+For model statistics, set `Data.cornerstoneParam.switchAgent` to the numeric `tenantId` returned by the matching record.
+Do not invent `workspaceId`, `tenantId`, `model_call_source`, or billing-mode fields in `reqDTO`.
+If no unique match exists, report the uncertain association instead of silently switching to the default workspace.
 
-## 3. 工作空间模型统计
+## 3. Workspace Model Statistics
 
-类型：Type B。
-产品：`sfm_bailian`；动作：`BroadScopeAspnGateway`。
-内部接口：`zeldaEasy.bailian-telemetry.platform-model.getModelStatistic`。
-使用上一节确认的 `switchAgent`，其余 Type B 字段沿用公共协议。
+Type: Type B.
+Product: `sfm_bailian`; action: `BroadScopeAspnGateway`.
+Internal API: `zeldaEasy.bailian-telemetry.platform-model.getModelStatistic`.
+Use the `switchAgent` verified in the preceding section; follow the shared protocol for the remaining Type B fields.
 
-先构造以下 `reqDTO` 基础对象，再加入必须的时间字段：
+Start with this `reqDTO` object, then add the required time fields:
 
 ```json
 {
@@ -71,42 +71,42 @@ Type B 成功后从 `DataV2.data.data` 读取业务内容，不能把 `DataV2.re
 }
 ```
 
-| 必须加入的字段 | 类型与取值 |
+| Required additional field | Type and value |
 | --- | --- |
-| `startTime` | 数值；告警观测窗口起点的 Unix 毫秒时间戳 |
-| `endTime` | 数值；同一窗口终点的 Unix 毫秒时间戳 |
+| `startTime` | Number; Unix timestamp in milliseconds for the start of the alert observation window |
+| `endTime` | Number; Unix timestamp in milliseconds for the end of the same window |
 
-时间值由前一步告警时间和规则周期计算，不能用字符串占位符直接提交。
-优先查询覆盖触发前后的小窗口；需要较长历史时按不超过 14 天的区间查询。
-不同窗口的平均值不能直接相加或取简单平均；跨窗口统计应保留每个窗口的原值与计数。
-本合同不添加尚未在执行链路确认的模型或 Key 筛选参数。
-本节请求因此是指定工作空间的整体汇总。将它作为背景证据，不能拿整个空间的失败率或平均延迟与某个模型的规则阈值直接比较。单模型证据优先使用下一节中精确匹配的模型行及同模型日志；无法得到同口径的模型平均首 token 耗时时保留未知。
+Calculate these values from the alert time and rule period established earlier. Never submit string placeholders.
+Prefer a short window covering the time before and after the trigger. Split longer history into intervals of no more than 14 days.
+Do not sum averages from different windows or take their simple average; preserve each window's original values and counts.
+This contract does not add model or key filters that have not been verified in the execution path.
+The request in this section therefore returns an aggregate for the selected workspace. Use it as background evidence; do not compare a workspace-wide failure rate or average latency directly with a single model's rule threshold. For model-specific evidence, prefer the exact matching model row in the next section and logs for that model. Keep average first-token latency unknown when no model-specific value with matching semantics is available.
 
-已在只读检查中见到的返回字段：
+Response fields observed during a read-only check:
 
-| 字段 | 能支持的判断 |
+| Field | Supported interpretation |
 | --- | --- |
-| `callCount` | 当前范围的调用计数 |
-| `callSuccessCount`、`callFailedCount` | 成功与失败计数；先核对规则分母和取消请求口径 |
-| `call4xxErrorCount`、`call5xxErrorCount` | 客户端与服务端状态类别的错误计数 |
-| `avgCallDuration` | 接口给出的平均耗时；先确认单位，不当作 P95 |
-| `avgFirstTokenDuration` | 接口给出的平均首 token 耗时；先确认单位和适用请求类型 |
-| `resourceCount` | 接口给出的资源计数；不直接解释为失败资源数 |
-| `usages` | 按计量项读取 `key`、`value`、`unit`；额外维度结构未确认前不展开或合并 |
+| `callCount` | Call count within the queried scope |
+| `callSuccessCount`, `callFailedCount` | Success and failure counts; first verify the rule's denominator and treatment of cancelled requests |
+| `call4xxErrorCount`, `call5xxErrorCount` | Error counts for client-error and server-error HTTP status classes |
+| `avgCallDuration` | API-reported average duration; verify the unit and do not treat it as P95 |
+| `avgFirstTokenDuration` | API-reported average first-token duration; verify the unit and applicable request types |
+| `resourceCount` | API-reported resource count; do not interpret it as a count of failed resources |
+| `usages` | Read `key`, `value`, and `unit` for each measure; do not expand or merge additional dimensions until their structure is verified |
 
-这些字段的最近一次只读样本来自无请求窗口，只确认结构，不能作为故障原因的实证。
-`callCount=0` 时错误率是不可计算，不输出 0% 作为服务正常的证明。
-失败请求分类与规则口径未对齐时，只陈述计数，不计算会产生误导的错误率。
-不同单位和维度的 `usages` 分开比较，不把 token、字符、次数和音视频时长相加。
+The latest read-only sample for these fields covered a window with no requests. It confirms the structure, not the cause of a failure.
+When `callCount=0`, the error rate cannot be calculated. Do not report 0% as proof of a healthy service.
+If failure classifications and rule semantics have not been aligned, report counts without calculating a misleading error rate.
+Compare `usages` with different units and dimensions separately; do not add tokens, characters, counts, and audio/video durations together.
 
-## 4. 模型维度统计列表
+## 4. Statistics by Model
 
-类型：Type B。
-产品：`sfm_bailian`；动作：`BroadScopeAspnGateway`。
-内部接口：`zeldaEasy.bailian-telemetry.platform-model.listModelStatisticData`。
-使用与汇总相同的 `switchAgent`、`startTime`、`endTime`。
+Type: Type B.
+Product: `sfm_bailian`; action: `BroadScopeAspnGateway`.
+Internal API: `zeldaEasy.bailian-telemetry.platform-model.listModelStatisticData`.
+Use the same `switchAgent`, `startTime`, and `endTime` as the aggregate query.
 
-`reqDTO` 基础对象如下，提交前加入上一节规定的两个数值时间字段：
+Start with this `reqDTO` object and add the two numeric time fields specified in the preceding section before submitting:
 
 ```json
 {
@@ -120,25 +120,25 @@ Type B 成功后从 `DataV2.data.data` 读取业务内容，不能把 `DataV2.re
 }
 ```
 
-返回 `list`，总数为 `totalCount` 或兼容字段 `total`。
-源码合同中的行字段包括 `model`、`workspaceId`、`apiKey`、`usages`。
-计数字段可能包含 `callCount`、`callSuccessCount`、`callFailedCount`，缺失时保持未知。
-仅有失败调用的行可能没有 `usages`；不能因为缺少消耗明细就丢弃失败记录。
-最近一次只读检查返回空列表，尚未用非空故障样本核验逐行字段。
+The response contains `list`, with the total in `totalCount` or the compatible field `total`.
+The source-code contract includes row fields `model`, `workspaceId`, `apiKey`, and `usages`.
+Count fields may include `callCount`, `callSuccessCount`, and `callFailedCount`; keep missing values unknown.
+Rows containing only failed calls may omit `usages`. Do not discard failure records because consumption details are absent.
+The latest read-only check returned an empty list; individual row fields have not been verified against a nonempty failure sample.
 
-每页最多取 50 条；`skip` 按实际已返回条数累加，直到达到总数。
-不要仅分析首个“调用量最高”页面就断言其他模型或 Key 没有异常。
-模型名、工作空间和 Key 标识均来自返回值；按规则中的资源精确匹配。
-`apiKey` 字段不能被假定为可公开的名称或安全 ID；仅在内存中关联，输出掩码。
-可以比较各模型的调用增量、失败增量和用量变化，区分时间相关性与因果结论。
+Retrieve at most 50 records per page. Increase `skip` by the number of records actually returned until the total is reached.
+Do not analyze only the first page of highest-call-volume records and conclude that other models or keys have no anomalies.
+Use model names, workspaces, and key identifiers from returned values, matching the resource in the rule exactly.
+Do not assume `apiKey` contains a public name or a safe identifier. Correlate it only in memory and mask it in output.
+You may compare changes in calls, failures, and usage by model, while distinguishing temporal correlation from a causal conclusion.
 
-## 5. 同窗口请求日志
+## 5. Request Logs for the Same Window
 
-类型：Type B。
-产品：`sfm_bailian`；动作：`BroadScopeAspnGateway`。
-内部接口：`zeldaEasy.bailian-telemetry.platform-model.listModelLogs`。
+Type: Type B.
+Product: `sfm_bailian`; action: `BroadScopeAspnGateway`.
+Internal API: `zeldaEasy.bailian-telemetry.platform-model.listModelLogs`.
 
-`reqDTO` 基础对象如下，再加入必需的 `startTime`、`endTime` 数值毫秒时间戳：
+Start with this `reqDTO` object, then add the required numeric millisecond timestamps `startTime` and `endTime`:
 
 ```json
 {
@@ -147,82 +147,82 @@ Type B 成功后从 `DataV2.data.data` 读取业务内容，不能把 `DataV2.re
 }
 ```
 
-仅使用已确认的可选筛选：
+Use only the verified optional filters:
 
-| 字段 | 类型与来源 |
+| Field | Type and source |
 | --- | --- |
-| `modelRequestId` | 字符串；用户或上一调用返回的确切请求 ID |
-| `models` | 字符串数组；统计列表或规则已确认的模型 ID |
-| `statusCodeTypes` | 数组；只取 `CANCEL`、`SUCCESS`、`CLIENT_ERROR`、`SERVER_ERROR` |
+| `modelRequestId` | String; the exact request ID supplied by the user or returned by a preceding call |
+| `models` | String array; model IDs confirmed by the statistics list or rule |
+| `statusCodeTypes` | Array containing only `CANCEL`, `SUCCESS`, `CLIENT_ERROR`, or `SERVER_ERROR` |
 
-请求 ID 与时间、模型、状态条件按交集筛选，不能声称它会忽略其他条件。
-首次需要计算错误率或延迟分布时，不加状态筛选；状态筛选只用于后续定位失败样本。
-先确定总调用范围再找异常，不能把筛过错误的日志页当作全量分母。
-使用与统计一致的时间窗口，逐行核对 `originLog.workspace_id` 与目标工作空间。
-日志现有调用合同没有 workspace 筛选参数，不猜加 `workspaceId`。
-缺少行工作空间或无法映射时，不能将这些行合并成该租户的确定统计。
+Request ID, time, model, and status filters are intersected. Do not claim that a request ID bypasses the other filters.
+For an initial error-rate or latency-distribution calculation, omit status filters; use them only afterward to locate failure samples.
+Establish the complete call population before examining anomalies. An error-filtered log page is not the denominator for all calls.
+Use the same time window as the statistics query and check each row's `originLog.workspace_id` against the target workspace.
+The existing log request contract has no workspace filter. Do not invent a `workspaceId` parameter.
+If a row lacks a workspace or cannot be mapped, do not include it in statistics claimed to belong definitively to that tenant.
 
-官方日志文档确认只保留近 14 天 PAYG 调用，不包含请求头、请求体或响应体。
-窗口超过保留期时说明不可查询；拆窗不能恢复已经过期的数据。
-不要据此承诺 Token Plan、其他计费范围或全部历史调用的可观测性。
+Official log documentation confirms retention of only the most recent 14 days of PAYG calls, excluding request headers, request bodies, and response bodies.
+Explain when a window falls outside retention; splitting windows cannot recover expired records.
+Do not promise observability for Token Plan, other billing scopes, or all historical calls on this basis.
 
-业务返回可含 `totalCount`、`maxResults`、`list`；最近空样本未返回 `list`。
-当总数明确为 0 且没有 `list` 时，报告“该范围无日志”。
-当总数大于 0 但 `list` 缺失、空页未达总数或响应结构错误时，报告数据不完整。
-不要把缺失列表一律替换成空数组，再输出“没有失败请求”。
-按 `skip` 和 `maxResults` 翻页；重复页或数据持续变化时停止并说明完整性限制。
+The business response may contain `totalCount`, `maxResults`, and `list`; the latest empty sample omitted `list`.
+When the total is explicitly 0 and `list` is absent, report "No logs in this scope."
+When the total is positive but `list` is missing, an empty page precedes the total, or the response structure is invalid, report incomplete data.
+Do not universally replace missing lists with empty arrays and then report "No failed requests."
+Paginate using `skip` and `maxResults`. Stop if pages repeat or data continues changing, and explain the completeness limitation.
 
-原始日志只读取完成当前诊断需要的字段：
+Read only the raw log fields needed for the current diagnosis:
 
-| 字段 | 用法与限制 |
+| Field | Use and limitation |
 | --- | --- |
-| `originLog.request_id` | 关联具体请求；只在需要用户追踪时展示 |
-| `originLog.model`、`workspace_id` | 核对模型和工作空间归属 |
-| `originLog.start_unix_timestamp`、`start_time` | 优先毫秒时间戳，统一为用户时区展示 |
-| `originLog.status_code` | 按 HTTP 类别分类；保留取消与未知情况 |
-| `originLog.duration` | 原始耗时，当前 CLI 按毫秒解释；不等同于首 token 耗时 |
-| `formattedUsages` | 保留返回的 `key`、`value`、`unit`，不要混合不同单位 |
+| `originLog.request_id` | Correlate a specific request; display only when the user needs it for follow-up |
+| `originLog.model`, `workspace_id` | Verify model and workspace ownership |
+| `originLog.start_unix_timestamp`, `start_time` | Prefer the millisecond timestamp and display times consistently in the user's time zone |
+| `originLog.status_code` | Classify by HTTP category, retaining cancelled and unknown cases |
+| `originLog.duration` | Raw duration, interpreted as milliseconds by the current CLI; not first-token duration |
+| `formattedUsages` | Preserve the returned `key`, `value`, and `unit`; do not mix units |
 
-不展示 `uid`、Key 原值或整份原始响应；不递归展开未经确认的 `extras`。
-目前没有确认日志中的稳定业务错误码或上游错误消息字段，不能从 HTTP 状态猜完整错误码。
-现有 `usage logs` 标准 DTO 的 `errorCode=null`、`firstOutputDurationMs=0` 是填充值，不是观测结果。
-不能用上述填充值证明“没有业务错误”或“首 token 延时为零”。
-本地计算分位数时注明算法、样本数量、窗口和完整性；不能冒充平台告警引擎的原始指标。
+Do not display `uid`, raw keys, or the entire raw response. Do not recursively expand unverified `extras`.
+No stable business error-code or upstream error-message field has been confirmed in these logs. Do not infer a full error code from an HTTP status.
+The existing `usage logs` standard DTO uses `errorCode=null` and `firstOutputDurationMs=0` as placeholders, not observations.
+Those placeholders do not prove "No business error" or "Zero first-token latency."
+When calculating percentiles locally, state the algorithm, sample size, window, and completeness; do not present them as metrics returned by the platform's alert engine.
 
-## 6. 按需查看模型默认限流
+## 6. Inspect Default Model Rate Limits When Relevant
 
-类型：Type A；产品：`AliyunDeliveryService`；动作：`ListModelSeries`。
-`params` 基础对象为 `{"Language":"zh-CN","MatchOnly":true}`。
-再加入 `Query`，其值必须是前一步确认的完整模型 ID，并从返回列表精确匹配。
-读取匹配模型的 `QpmInfo.ModelDefault`，保留 `CountLimit`、`CountLimitPeriod`、`UsageLimit`、`UsageLimitPeriod`。
-源码按 `CountLimit / CountLimitPeriod × 60` 计算默认 RPM，TPM 同理使用 Usage 字段。
-这是目录默认限流，不证明当前账号或 Key 没有单独配额，也不证明某次请求确因限流失败。
-缺少默认值不表示没有限流；不能把空值或输出层的 0 当作无限额。
+Type: Type A; product: `AliyunDeliveryService`; action: `ListModelSeries`.
+Start with `params` set to `{"Language":"zh-CN","MatchOnly":true}`.
+Add `Query` using the full model ID confirmed earlier, then match that ID exactly in the returned list.
+Read the matched model's `QpmInfo.ModelDefault`, preserving `CountLimit`, `CountLimitPeriod`, `UsageLimit`, and `UsageLimitPeriod`.
+The source computes default RPM as `CountLimit / CountLimitPeriod × 60`, and TPM equivalently from the Usage fields.
+These are catalog defaults. They do not establish whether the current account or key has a separate quota, or prove that rate limiting caused a particular request to fail.
+Missing defaults do not mean no rate limit; do not interpret null values or an output-layer 0 as unlimited.
 
-## 7. 按完整错误码检索官方处理办法
+## 7. Find Official Guidance by Full Error Code
 
-已有完整业务错误码时，用该码检索；没有时可先以模型、HTTP 状态和症状查一般排障资料，但不能据搜索结果替用户认定具体错误码。
-只发送错误码、必要的模型/接口名称，去除提示词、账号、请求内容和内部地址。
-以下是使用公开错误码的完整调用示例，不表示当前告警就是该错误：
+When a full business error code is available, search for that code. Otherwise, search general troubleshooting guidance by model, HTTP status, and symptom, without assigning a specific error code based on search results.
+Send only the error code and necessary model/API names; remove prompts, account details, request content, and internal addresses.
+This complete example uses a public error code and does not imply that it caused the current alert:
 
 ```bash
 qianwen api call --product aliyun-search-maas --action SearchAll --params '{"CommonParams":{"Loc":"2024SPAllResult","From":"pc","CookieId":""},"QuerySceneParams":{"QueryWord":"Throttling.RateQuota","Limit":5,"PageNo":1,"Language":"zh","BizType":"doc"}}' --format json
 ```
 
-这是 Type A；成功样本包含 `Success="true"`、`ErrorCode="OK"`、`TotalCount` 和 `Info`。明确的失败标记或非 `OK` 的 `ErrorCode` 应报告查询失败，不能把缺失的 `Info` 当作没有匹配文档。
-按 [CLI 协议](cli-protocol.md) 判断成功，再从实际返回项取文档标题、摘要和 URL。
-只将官方相关文档作为依据，阅读对应段落并核对模型、API、计费范围和错误码是否一致。
-需要浏览或操作网页时遵循主 skill 的浏览器约定，不仅凭搜索摘要断言解决办法。
-官方通用错误参考：[错误信息](https://platform.qianwenai.com/docs/api-reference/preparation/error-messages)。
-文档描述的可能原因与当前观测事实分开陈述；搜索无结果不证明该错误不存在。
+This is Type A. A successful sample contains `Success="true"`, `ErrorCode="OK"`, `TotalCount`, and `Info`. Report an explicit failure marker or a non-`OK` `ErrorCode` as a failed query; do not interpret missing `Info` as no matching documents.
+Confirm success using the [CLI protocol](cli-protocol.md), then extract document titles, summaries, and URLs from actual result items.
+Use relevant official documents as evidence. Read the applicable section and verify that its model, API, billing scope, and error code match.
+When browsing or interacting with a webpage, follow the main skill's browser rules. Do not assert a remedy based only on a search snippet.
+Official general error reference: [Error messages](https://platform.qianwenai.com/docs/api-reference/preparation/error-messages).
+Distinguish possible causes described in documentation from observed facts. An empty search result does not prove that an error does not exist.
 
-## 8. 输出判断与范围
+## 8. Conclusions and Scope
 
-先说明规则实际比较的指标与阈值，再列同资源、同窗口的证据，最后给适用的处理建议。
-使用“已确认”“与……一致”“尚不能确认”等准确表述，不把同时发生当成因果证明。
-汇总、模型列表和日志来自不同查询，取消、时间边界、保留期及更新延迟可能影响口径。
-发现不一致时报告各自范围，不强行补齐缺失字段或让总数相等。
-本文件不使用未经核验的分钟级时序指标，也不扩展复杂账单或资金查询。
-只有故障证据指向余额、额度或订阅时，再按需调用已有相关 skill 补充查询。
-余额和额度通常是当前快照，不能用当前状态倒推告警发生时的状态。
-本 skill 给出建议；调整阈值、关闭规则、修改预算或发起充值不属于本文件的只读诊断。
+First state the metric and threshold the rule actually compares, then present evidence for the same resource and window, followed by applicable recommendations.
+Use precise wording such as "confirmed," "consistent with," and "not yet confirmed." Concurrent events do not establish causation.
+Aggregates, model lists, and logs come from separate queries; cancellations, time boundaries, retention, and update delays may affect their definitions and scope.
+Report each source's scope when they disagree. Do not fill missing fields or force totals to match.
+This reference does not use unverified minute-level time-series metrics or extend into complex billing or financial queries.
+Only when failure evidence points to balance, quota, or subscription issues should an existing relevant skill perform a supplemental query.
+Balances and quotas are usually current snapshots; do not use current state to infer state at the time of a historical alert.
+This skill provides recommendations. Changing thresholds, disabling rules, modifying budgets, and initiating recharges are outside this reference's read-only diagnosis.
